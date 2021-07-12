@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "winternl.h": "c",
+        "*.idl": "c",
+        "d3d11_private.h": "c",
+        "typeinfo": "c",
+        "dlfcn.h": "c"
+    }
+}
