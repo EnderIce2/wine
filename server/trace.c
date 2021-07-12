@@ -2041,6 +2041,50 @@ static void dump_get_handle_fd_reply( const struct get_handle_fd_reply *req )
     fprintf( stderr, ", options=%08x", req->options );
 }
 
+static void dump_create_gpu_resource_request( const struct create_gpu_resource_request *req )
+{
+    fprintf( stderr, " access=%08x", req->access );
+    fprintf( stderr, ", fd=%d", req->fd );
+    dump_varargs_object_attributes( ", objattr=", cur_size );
+}
+
+static void dump_create_gpu_resource_reply( const struct create_gpu_resource_reply *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+    fprintf( stderr, ", kmt_handle=%04x", req->kmt_handle );
+}
+
+static void dump_open_gpu_resource_request( const struct open_gpu_resource_request *req )
+{
+    fprintf( stderr, " access=%08x", req->access );
+    fprintf( stderr, ", kmt_handle=%04x", req->kmt_handle );
+    fprintf( stderr, ", attributes=%08x", req->attributes );
+    fprintf( stderr, ", rootdir=%04x", req->rootdir );
+    dump_varargs_unicode_str( ", name=", cur_size );
+}
+
+static void dump_open_gpu_resource_reply( const struct open_gpu_resource_reply *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+}
+
+static void dump_query_gpu_resource_request( const struct query_gpu_resource_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+}
+
+static void dump_query_gpu_resource_reply( const struct query_gpu_resource_reply *req )
+{
+    fprintf( stderr, " kmt_handle=%04x", req->kmt_handle );
+    dump_varargs_bytes( ", userdata=", cur_size );
+}
+
+static void dump_set_userdata_gpu_resource_request( const struct set_userdata_gpu_resource_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+    dump_varargs_bytes( ", userdata=", cur_size );
+}
+
 static void dump_get_directory_cache_entry_request( const struct get_directory_cache_entry_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
@@ -4604,6 +4648,10 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_alloc_file_handle_request,
     (dump_func)dump_get_handle_unix_name_request,
     (dump_func)dump_get_handle_fd_request,
+    (dump_func)dump_create_gpu_resource_request,
+    (dump_func)dump_open_gpu_resource_request,
+    (dump_func)dump_query_gpu_resource_request,
+    (dump_func)dump_set_userdata_gpu_resource_request,
     (dump_func)dump_get_directory_cache_entry_request,
     (dump_func)dump_flush_request,
     (dump_func)dump_get_file_info_request,
@@ -4881,6 +4929,10 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_alloc_file_handle_reply,
     (dump_func)dump_get_handle_unix_name_reply,
     (dump_func)dump_get_handle_fd_reply,
+    (dump_func)dump_create_gpu_resource_reply,
+    (dump_func)dump_open_gpu_resource_reply,
+    (dump_func)dump_query_gpu_resource_reply,
+    NULL,
     (dump_func)dump_get_directory_cache_entry_reply,
     (dump_func)dump_flush_reply,
     (dump_func)dump_get_file_info_reply,
@@ -5158,6 +5210,10 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "alloc_file_handle",
     "get_handle_unix_name",
     "get_handle_fd",
+    "create_gpu_resource",
+    "open_gpu_resource",
+    "query_gpu_resource",
+    "set_userdata_gpu_resource",
     "get_directory_cache_entry",
     "flush",
     "get_file_info",

@@ -1365,8 +1365,48 @@ enum server_fd_type
     FD_TYPE_MAILSLOT, /* mailslot */
     FD_TYPE_CHAR,     /* unspecified char device */
     FD_TYPE_DEVICE,   /* Windows device file */
+    FD_TYPE_RESOURCE, /* DXGI GPU resource */
     FD_TYPE_NB_TYPES
 };
+
+/* Create a GPU resource object */
+@REQ(create_gpu_resource)
+    unsigned int access;
+    int          fd;
+    VARARG(objattr,object_attributes); /* object attributes */
+@REPLY
+    obj_handle_t handle;
+    obj_handle_t kmt_handle;
+@END
+
+
+/* Open a GPU Resource */
+@REQ(open_gpu_resource)
+    unsigned int access;        /* wanted access rights */
+
+    obj_handle_t kmt_handle;
+    /* OR */
+    unsigned int attributes;    /* object attributes */
+    obj_handle_t rootdir;       /* root directory */
+    VARARG(name,unicode_str);   /* object name */
+@REPLY
+    obj_handle_t handle;
+@END
+
+
+/* Query KMT Handle and user data of GPU Resource */
+@REQ(query_gpu_resource)
+    obj_handle_t handle;
+@REPLY
+    obj_handle_t kmt_handle;
+    VARARG(userdata,bytes);
+@END
+
+/* Sets the userdata of the GPU resource */
+@REQ(set_userdata_gpu_resource)
+    obj_handle_t handle;
+    VARARG(userdata,bytes);
+@END
 
 
 /* Retrieve (or allocate) the client-side directory cache entry */

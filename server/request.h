@@ -166,6 +166,10 @@ DECL_HANDLER(open_file_object);
 DECL_HANDLER(alloc_file_handle);
 DECL_HANDLER(get_handle_unix_name);
 DECL_HANDLER(get_handle_fd);
+DECL_HANDLER(create_gpu_resource);
+DECL_HANDLER(open_gpu_resource);
+DECL_HANDLER(query_gpu_resource);
+DECL_HANDLER(set_userdata_gpu_resource);
 DECL_HANDLER(get_directory_cache_entry);
 DECL_HANDLER(flush);
 DECL_HANDLER(get_file_info);
@@ -446,6 +450,10 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_alloc_file_handle,
     (req_handler)req_get_handle_unix_name,
     (req_handler)req_get_handle_fd,
+    (req_handler)req_create_gpu_resource,
+    (req_handler)req_open_gpu_resource,
+    (req_handler)req_query_gpu_resource,
+    (req_handler)req_set_userdata_gpu_resource,
     (req_handler)req_get_directory_cache_entry,
     (req_handler)req_flush,
     (req_handler)req_get_file_info,
@@ -1006,6 +1014,25 @@ C_ASSERT( FIELD_OFFSET(struct get_handle_fd_reply, cacheable) == 12 );
 C_ASSERT( FIELD_OFFSET(struct get_handle_fd_reply, access) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_handle_fd_reply, options) == 20 );
 C_ASSERT( sizeof(struct get_handle_fd_reply) == 24 );
+C_ASSERT( FIELD_OFFSET(struct create_gpu_resource_request, access) == 12 );
+C_ASSERT( FIELD_OFFSET(struct create_gpu_resource_request, fd) == 16 );
+C_ASSERT( sizeof(struct create_gpu_resource_request) == 24 );
+C_ASSERT( FIELD_OFFSET(struct create_gpu_resource_reply, handle) == 8 );
+C_ASSERT( FIELD_OFFSET(struct create_gpu_resource_reply, kmt_handle) == 12 );
+C_ASSERT( sizeof(struct create_gpu_resource_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct open_gpu_resource_request, access) == 12 );
+C_ASSERT( FIELD_OFFSET(struct open_gpu_resource_request, kmt_handle) == 16 );
+C_ASSERT( FIELD_OFFSET(struct open_gpu_resource_request, attributes) == 20 );
+C_ASSERT( FIELD_OFFSET(struct open_gpu_resource_request, rootdir) == 24 );
+C_ASSERT( sizeof(struct open_gpu_resource_request) == 32 );
+C_ASSERT( FIELD_OFFSET(struct open_gpu_resource_reply, handle) == 8 );
+C_ASSERT( sizeof(struct open_gpu_resource_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct query_gpu_resource_request, handle) == 12 );
+C_ASSERT( sizeof(struct query_gpu_resource_request) == 16 );
+C_ASSERT( FIELD_OFFSET(struct query_gpu_resource_reply, kmt_handle) == 8 );
+C_ASSERT( sizeof(struct query_gpu_resource_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct set_userdata_gpu_resource_request, handle) == 12 );
+C_ASSERT( sizeof(struct set_userdata_gpu_resource_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_directory_cache_entry_request, handle) == 12 );
 C_ASSERT( sizeof(struct get_directory_cache_entry_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_directory_cache_entry_reply, entry) == 8 );

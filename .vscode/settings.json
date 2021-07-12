@@ -4,6 +4,14 @@
         "*.idl": "c",
         "d3d11_private.h": "c",
         "typeinfo": "c",
-        "dlfcn.h": "c"
+        "dlfcn.h": "c",
+        "unix_private.h": "c",
+        "stdlib.h": "c",
+        "vulkan_private.h": "c",
+        "*.tcc": "c",
+        "complex": "c",
+        "fstream": "c",
+        "winbase.h": "c",
+        "heap.h": "c"
     }
 }

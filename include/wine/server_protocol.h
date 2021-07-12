@@ -1632,7 +1632,72 @@ enum server_fd_type
     FD_TYPE_MAILSLOT,
     FD_TYPE_CHAR,
     FD_TYPE_DEVICE,
+    FD_TYPE_RESOURCE,
     FD_TYPE_NB_TYPES
+};
+
+
+struct create_gpu_resource_request
+{
+    struct request_header __header;
+    unsigned int access;
+    int          fd;
+    /* VARARG(objattr,object_attributes); */
+    char __pad_20[4];
+};
+struct create_gpu_resource_reply
+{
+    struct reply_header __header;
+    obj_handle_t handle;
+    obj_handle_t kmt_handle;
+};
+
+
+
+struct open_gpu_resource_request
+{
+    struct request_header __header;
+    unsigned int access;
+
+    obj_handle_t kmt_handle;
+
+    unsigned int attributes;
+    obj_handle_t rootdir;
+    /* VARARG(name,unicode_str); */
+    char __pad_28[4];
+};
+struct open_gpu_resource_reply
+{
+    struct reply_header __header;
+    obj_handle_t handle;
+    char __pad_12[4];
+};
+
+
+
+struct query_gpu_resource_request
+{
+    struct request_header __header;
+    obj_handle_t handle;
+};
+struct query_gpu_resource_reply
+{
+    struct reply_header __header;
+    obj_handle_t kmt_handle;
+    /* VARARG(userdata,bytes); */
+    char __pad_12[4];
+};
+
+
+struct set_userdata_gpu_resource_request
+{
+    struct request_header __header;
+    obj_handle_t handle;
+    /* VARARG(userdata,bytes); */
+};
+struct set_userdata_gpu_resource_reply
+{
+    struct reply_header __header;
 };
 
 
@@ -5461,6 +5526,10 @@ enum request
     REQ_alloc_file_handle,
     REQ_get_handle_unix_name,
     REQ_get_handle_fd,
+    REQ_create_gpu_resource,
+    REQ_open_gpu_resource,
+    REQ_query_gpu_resource,
+    REQ_set_userdata_gpu_resource,
     REQ_get_directory_cache_entry,
     REQ_flush,
     REQ_get_file_info,
@@ -5742,6 +5811,10 @@ union generic_request
     struct alloc_file_handle_request alloc_file_handle_request;
     struct get_handle_unix_name_request get_handle_unix_name_request;
     struct get_handle_fd_request get_handle_fd_request;
+    struct create_gpu_resource_request create_gpu_resource_request;
+    struct open_gpu_resource_request open_gpu_resource_request;
+    struct query_gpu_resource_request query_gpu_resource_request;
+    struct set_userdata_gpu_resource_request set_userdata_gpu_resource_request;
     struct get_directory_cache_entry_request get_directory_cache_entry_request;
     struct flush_request flush_request;
     struct get_file_info_request get_file_info_request;
@@ -6021,6 +6094,10 @@ union generic_reply
     struct alloc_file_handle_reply alloc_file_handle_reply;
     struct get_handle_unix_name_reply get_handle_unix_name_reply;
     struct get_handle_fd_reply get_handle_fd_reply;
+    struct create_gpu_resource_reply create_gpu_resource_reply;
+    struct open_gpu_resource_reply open_gpu_resource_reply;
+    struct query_gpu_resource_reply query_gpu_resource_reply;
+    struct set_userdata_gpu_resource_reply set_userdata_gpu_resource_reply;
     struct get_directory_cache_entry_reply get_directory_cache_entry_reply;
     struct flush_reply flush_reply;
     struct get_file_info_reply get_file_info_reply;
@@ -6252,7 +6329,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 725
+#define SERVER_PROTOCOL_VERSION 726
 
 /* ### protocol_version end ### */
 

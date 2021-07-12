@@ -99,7 +99,7 @@ UNSUPPORTED_EXTENSIONS = [
     "VK_EXT_pipeline_creation_feedback",
     "VK_GOOGLE_display_timing",
     "VK_KHR_external_fence_win32",
-    "VK_KHR_external_memory_win32",
+    #"VK_KHR_external_memory_win32",
     "VK_KHR_external_semaphore_win32",
     # Relates to external_semaphore and needs type conversions in bitflags.
     "VK_KHR_shared_presentable_image", # Needs WSI work.
@@ -110,7 +110,7 @@ UNSUPPORTED_EXTENSIONS = [
     "VK_EXT_image_drm_format_modifier",
     "VK_EXT_physical_device_drm",
     "VK_KHR_external_fence_fd",
-    "VK_KHR_external_memory_fd",
+    #"VK_KHR_external_memory_fd",
     "VK_KHR_external_semaphore_fd",
 
     # Extensions which require callback handling
@@ -189,10 +189,12 @@ FUNCTION_OVERRIDES = {
 
     # Device functions
     "vkAllocateCommandBuffers" : {"dispatch" : True, "driver" : False, "thunk" : ThunkType.NONE},
+    "vkAllocateMemory" : {"dispatch" : True, "driver" : False, "thunk" : False},
     "vkCreateCommandPool" : {"dispatch": True, "driver" : False, "thunk" : ThunkType.NONE},
     "vkDestroyCommandPool" : {"dispatch": True, "driver" : False, "thunk" : ThunkType.NONE},
     "vkDestroyDevice" : {"dispatch" : True, "driver" : False, "thunk" : ThunkType.NONE},
     "vkFreeCommandBuffers" : {"dispatch" : True, "driver" : False, "thunk" : ThunkType.NONE},
+    "vkFreeMemory" : {"dispatch" : True, "driver" : False, "thunk" : False},
     "vkGetDeviceProcAddr" : {"dispatch" : False, "driver" : True, "thunk" : ThunkType.NONE, "loader_thunk" : ThunkType.NONE},
     "vkGetDeviceQueue" : {"dispatch": True, "driver" : False, "thunk" : ThunkType.NONE},
     "vkGetDeviceQueue2" : {"dispatch": True, "driver" : False, "thunk" : ThunkType.NONE},
@@ -246,6 +248,10 @@ FUNCTION_OVERRIDES = {
     # VK_EXT_debug_report
     "vkCreateDebugReportCallbackEXT" : {"dispatch": True, "driver" : False, "thunk" : ThunkType.NONE},
     "vkDestroyDebugReportCallbackEXT" : {"dispatch": True, "driver" : False, "thunk" : ThunkType.NONE},
+
+    # VK_KHR_external_memory_win32
+    "vkGetMemoryWin32HandleKHR" : {"dispatch" : False, "driver" : False, "thunk" : False},
+    "vkGetMemoryWin32HandlePropertiesKHR" : {"dispatch" : False, "driver" : False, "thunk" : False},
 }
 
 STRUCT_CHAIN_CONVERSIONS = {
@@ -1034,6 +1040,8 @@ class VkHandle(object):
             return "wine_cmd_pool_from_handle({0})->command_pool".format(name)
         if self.name == "VkDebugUtilsMessengerEXT":
             return "wine_debug_utils_messenger_from_handle({0})->debug_messenger".format(name)
+        if self.name == "VkDeviceMemory":
+            return "wine_dev_mem_from_handle({0})->dev_mem".format(name)
         if self.name == "VkDebugReportCallbackEXT":
             return "wine_debug_report_callback_from_handle({0})->debug_callback".format(name)
         if self.name == "VkSurfaceKHR":

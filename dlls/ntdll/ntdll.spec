@@ -1647,3 +1647,10 @@
 # Filesystem
 @ cdecl -syscall wine_nt_to_unix_file_name(ptr ptr ptr long)
 @ cdecl -syscall wine_unix_to_nt_file_name(str ptr ptr)
+
+# GPU Shared Resources
+@ cdecl __wine_create_gpu_resource(ptr ptr long ptr long)
+@ cdecl __wine_open_gpu_resource(ptr ptr long ptr)
+@ cdecl __wine_get_gpu_resource_fd(ptr ptr ptr)
+@ cdecl __wine_get_gpu_resource_info(ptr ptr ptr ptr)
+@ cdecl __wine_set_gpu_resource_userdata(ptr ptr long)

@@ -1701,7 +1701,6 @@ typedef struct VkCopyDescriptorSet_host
 typedef VkCopyDescriptorSet VkCopyDescriptorSet_host;
 #endif
 
-
 VkResult convert_VkDeviceCreateInfo_struct_chain(const void *pNext, VkDeviceCreateInfo *out_struct) DECLSPEC_HIDDEN;
 void free_VkDeviceCreateInfo_struct_chain(VkDeviceCreateInfo *s) DECLSPEC_HIDDEN;
 VkResult convert_VkInstanceCreateInfo_struct_chain(const void *pNext, VkInstanceCreateInfo *out_struct) DECLSPEC_HIDDEN;
@@ -1717,6 +1716,7 @@ struct vulkan_device_funcs
     VkResult (*p_vkAllocateCommandBuffers)(VkDevice, const VkCommandBufferAllocateInfo_host *, VkCommandBuffer *);
     VkResult (*p_vkAllocateDescriptorSets)(VkDevice, const VkDescriptorSetAllocateInfo_host *, VkDescriptorSet *);
     VkResult (*p_vkAllocateMemory)(VkDevice, const VkMemoryAllocateInfo_host *, const VkAllocationCallbacks *, VkDeviceMemory *);
+    VkResult (*p_vkGetMemoryFdKHR)(VkDevice, const struct VkMemoryGetFdInfoKHR *, int *);
     VkResult (*p_vkBeginCommandBuffer)(VkCommandBuffer, const VkCommandBufferBeginInfo_host *);
     VkResult (*p_vkBindAccelerationStructureMemoryNV)(VkDevice, uint32_t, const VkBindAccelerationStructureMemoryInfoNV_host *);
     VkResult (*p_vkBindBufferMemory)(VkDevice, VkBuffer, VkDeviceMemory, VkDeviceSize);

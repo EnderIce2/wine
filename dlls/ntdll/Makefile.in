@@ -15,6 +15,7 @@ C_SRCS = \
 	env.c \
 	error.c \
 	exception.c \
+	gpu_resource.c \
 	handletable.c \
 	heap.c \
 	large_int.c \
