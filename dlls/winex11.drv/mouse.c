@@ -644,6 +644,10 @@ static void send_mouse_input( HWND hwnd, Window window, unsigned int state, INPU
 {
     struct x11drv_win_data *data;
 
+    if (input->u.mi.dwFlags & MOUSEEVENTF_RIGHTUP) {
+        reset_clipping_window();
+    }
+
     input->type = INPUT_MOUSE;
 
     if (!hwnd)
