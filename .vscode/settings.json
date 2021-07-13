@@ -12,6 +12,7 @@
         "complex": "c",
         "fstream": "c",
         "winbase.h": "c",
-        "heap.h": "c"
+        "heap.h": "c",
+        "*.rh": "c"
     }
 }

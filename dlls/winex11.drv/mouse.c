@@ -644,15 +644,26 @@ static void send_mouse_input( HWND hwnd, Window window, unsigned int state, INPU
 {
     struct x11drv_win_data *data;
 
-    if (input->u.mi.dwFlags & MOUSEEVENTF_RIGHTUP)
-    {
-        reset_clipping_window();
-    }
+    // if (input->u.mi.dwFlags & MOUSEEVENTF_RIGHTUP)
+    // {
+    //     // retry_grab_clipping_window();
+    //     HWND foreground = GetForegroundWindow();
+    //     SendNotifyMessageW( foreground, WM_KILLFOCUS, FALSE, FALSE );
+    //     SendNotifyMessageW( foreground, WM_SETFOCUS, FALSE, FALSE );
+    // }
 
     input->type = INPUT_MOUSE;
 
     if (!hwnd)
     {
+        if (input->u.mi.dwFlags & MOUSEEVENTF_RIGHTUP)
+        {
+            reset_clipping_window();
+            // HWND foreground = GetForegroundWindow();
+            // SendNotifyMessageW( foreground, WM_KILLFOCUS, FALSE, FALSE );
+            // SendNotifyMessageW( foreground, WM_SETFOCUS, FALSE, FALSE );
+        }
+
         struct x11drv_thread_data *thread_data = x11drv_thread_data();
         HWND clip_hwnd = thread_data->clip_hwnd;
 
@@ -1552,6 +1563,7 @@ BOOL CDECL X11DRV_ClipCursor( LPCRECT clip )
     if (grab_pointer)
     {
         HWND foreground = GetForegroundWindow();
+        
         DWORD tid, pid;
 
         /* forward request to the foreground window if it's in a different thread */

@@ -299,14 +299,14 @@ static struct VkPhysicalDevice_T *wine_vk_physical_device_alloc(struct VkInstanc
     {
         if (wine_vk_device_extension_supported(host_properties[i].extensionName))
         {
-            if (!strcmp(host_properties[i].extensionName, "VK_KHR_external_memory_fd"))
-            {
-                TRACE("Substituting VK_KHR_external_memory_fd for VK_KHR_external_memory_win32\n");
+            // if (!strcmp(host_properties[i].extensionName, "VK_KHR_external_memory_fd"))
+            // {
+            //     TRACE("Substituting VK_KHR_external_memory_fd for VK_KHR_external_memory_win32\n");
 
-                snprintf(host_properties[i].extensionName, sizeof(host_properties[i].extensionName),
-                        VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
-                host_properties[i].specVersion = VK_KHR_EXTERNAL_MEMORY_WIN32_SPEC_VERSION;
-            }
+            //     snprintf(host_properties[i].extensionName, sizeof(host_properties[i].extensionName),
+            //             VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
+            //     host_properties[i].specVersion = VK_KHR_EXTERNAL_MEMORY_WIN32_SPEC_VERSION;
+            // }
             TRACE("Enabling extension '%s' for physical device %p\n", host_properties[i].extensionName, object);
             num_properties++;
         }
@@ -412,14 +412,14 @@ static VkResult wine_vk_device_convert_create_info(const VkDeviceCreateInfo *src
     const char **enabled_extensions = NULL;
     VkResult res;
 
-    dst->sType = src->sType;
-    dst->flags = src->flags;
-    dst->pNext = src->pNext;
-    dst->queueCreateInfoCount = src->queueCreateInfoCount;
-    dst->pQueueCreateInfos = src->pQueueCreateInfos;
-    dst->pEnabledFeatures = src->pEnabledFeatures;
+    // dst->sType = src->sType;
+    // dst->flags = src->flags;
+    // dst->pNext = src->pNext;
+    // dst->queueCreateInfoCount = src->queueCreateInfoCount;
+    // dst->pQueueCreateInfos = src->pQueueCreateInfos;
+    // dst->pEnabledFeatures = src->pEnabledFeatures;
 
-    //*dst = *src;
+    *dst = *src;
 
     if ((res = convert_VkDeviceCreateInfo_struct_chain(src->pNext, dst)) < 0)
     {
@@ -430,45 +430,45 @@ static VkResult wine_vk_device_convert_create_info(const VkDeviceCreateInfo *src
     /* Should be filtered out by loader as ICDs don't support layers. */
     dst->enabledLayerCount = 0;
     dst->ppEnabledLayerNames = NULL;
-    dst->enabledExtensionCount = 0;
-    dst->ppEnabledExtensionNames = NULL;
+    // dst->enabledExtensionCount = 0;
+    // dst->ppEnabledExtensionNames = NULL;
 
-    if (src->enabledExtensionCount > 0)
-    {
-        enabled_extensions = heap_calloc(src->enabledExtensionCount, sizeof(*src->ppEnabledExtensionNames));
-        if (!enabled_extensions)
-        {
-            ERR("Failed to allocate memory for enabled extensions\n");
-            return VK_ERROR_OUT_OF_HOST_MEMORY;
-        }
-
-        for (i = 0; i < src->enabledExtensionCount; i++)
-        {
-            if (!strcmp(src->ppEnabledExtensionNames[i], "VK_KHR_external_memory_win32"))
-            {
-                enabled_extensions[i] = "VK_KHR_external_memory_fd";
-            }
-            else
-            {
-                enabled_extensions[i] = src->ppEnabledExtensionNames[i];
-            }
-        }
-        dst->ppEnabledExtensionNames = enabled_extensions;
-        dst->enabledExtensionCount = src->enabledExtensionCount;
-    }
-
-    // TRACE("Enabled %u extensions.\n", dst->enabledExtensionCount);
-    // for (i = 0; i < dst->enabledExtensionCount; i++)
+    // if (src->enabledExtensionCount > 0)
     // {
-    //     const char *extension_name = dst->ppEnabledExtensionNames[i];
-    //     TRACE("Extension %u: %s.\n", i, debugstr_a(extension_name));
-    //     if (!wine_vk_device_extension_supported(extension_name))
+    //     enabled_extensions = heap_calloc(src->enabledExtensionCount, sizeof(*src->ppEnabledExtensionNames));
+    //     if (!enabled_extensions)
     //     {
-    //         WARN("Extension %s is not supported.\n", debugstr_a(extension_name));
-    //         wine_vk_device_free_create_info(dst);
-    //         return VK_ERROR_EXTENSION_NOT_PRESENT;
+    //         ERR("Failed to allocate memory for enabled extensions\n");
+    //         return VK_ERROR_OUT_OF_HOST_MEMORY;
     //     }
+
+    //     for (i = 0; i < src->enabledExtensionCount; i++)
+    //     {
+    //         if (!strcmp(src->ppEnabledExtensionNames[i], "VK_KHR_external_memory_win32"))
+    //         {
+    //             enabled_extensions[i] = "VK_KHR_external_memory_fd";
+    //         }
+    //         else
+    //         {
+    //             enabled_extensions[i] = src->ppEnabledExtensionNames[i];
+    //         }
+    //     }
+    //     dst->ppEnabledExtensionNames = enabled_extensions;
+    //     dst->enabledExtensionCount = src->enabledExtensionCount;
     // }
+
+    TRACE("Enabled %u extensions.\n", dst->enabledExtensionCount);
+    for (i = 0; i < dst->enabledExtensionCount; i++)
+    {
+        const char *extension_name = dst->ppEnabledExtensionNames[i];
+        TRACE("Extension %u: %s.\n", i, debugstr_a(extension_name));
+        if (!wine_vk_device_extension_supported(extension_name))
+        {
+            WARN("Extension %s is not supported.\n", debugstr_a(extension_name));
+            wine_vk_device_free_create_info(dst);
+            return VK_ERROR_EXTENSION_NOT_PRESENT;
+        }
+    }
 
     return VK_SUCCESS;
 }
