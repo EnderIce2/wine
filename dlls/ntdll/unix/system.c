@@ -2450,15 +2450,15 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         };
 
         ULONG i;
-        SYSTEM_MODULE_INFORMATION *smi = info;
+        RTL_PROCESS_MODULES *smi = info;
 
-        len = offsetof( SYSTEM_MODULE_INFORMATION, Modules[ARRAY_SIZE(fake_modules)] );
+        len = offsetof( RTL_PROCESS_MODULES, Modules[ARRAY_SIZE(fake_modules)] );
         if (len <= size)
         {
             memset( smi, 0, len );
             for (i = 0; i < ARRAY_SIZE(fake_modules); i++)
             {
-                SYSTEM_MODULE *sm = &smi->Modules[i];
+                RTL_PROCESS_MODULE_INFORMATION *sm = &smi->Modules[i];
                 sm->ImageBaseAddress = (char *)0x10000000 + 0x200000 * i;
                 sm->ImageSize = 0x200000;
                 sm->LoadOrderIndex = i;
@@ -2814,7 +2814,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             memset( info, 0, len );
             for (i = 0; i < ARRAY_SIZE(fake_modules); i++)
             {
-                SYSTEM_MODULE *sm = &module_info[i].BaseInfo;
+                RTL_PROCESS_MODULE_INFORMATION *sm = &module_info[i].BaseInfo;
                 sm->ImageBaseAddress = (char *)0x10000000 + 0x200000 * i;
                 sm->ImageSize = 0x200000;
                 sm->LoadOrderIndex = i;
@@ -2857,6 +2857,24 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             integrity_info->CodeIntegrityOptions = CODEINTEGRITY_OPTION_ENABLED;
         else
             ret = STATUS_INFO_LENGTH_MISMATCH;
+        break;
+    }
+
+    case SystemKernelDebuggerInformationEx:  /* 149 */
+    {
+        SYSTEM_KERNEL_DEBUGGER_INFORMATION_EX skdi;
+
+        skdi.DebuggerAllowed = FALSE;
+        skdi.DebuggerEnabled = FALSE;
+        skdi.DebuggerPresent = FALSE;
+
+        len = sizeof(skdi);
+        if (size >= len)
+        {
+            if (!info) ret = STATUS_ACCESS_VIOLATION;
+            else memcpy( info, &skdi, len );
+        }
+        else ret = STATUS_INFO_LENGTH_MISMATCH;
         break;
     }
 

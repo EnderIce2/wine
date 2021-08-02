@@ -635,7 +635,7 @@ static void test_query_procperf(void)
 static void test_query_module(void)
 {
     const RTL_PROCESS_MODULE_INFORMATION_EX *infoex;
-    SYSTEM_MODULE_INFORMATION *info;
+    RTL_PROCESS_MODULES *info;
     NTSTATUS status;
     ULONG size, i;
     char *buffer;
@@ -652,7 +652,7 @@ static void test_query_module(void)
 
     for (i = 0; i < info->ModulesCount; i++)
     {
-        const SYSTEM_MODULE *module = &info->Modules[i];
+        RTL_PROCESS_MODULE_INFORMATION *module = &info->Modules[i];
 
         ok(module->LoadOrderIndex == i, "%u: got index %u\n", i, module->LoadOrderIndex);
         ok(module->ImageBaseAddress || is_wow64, "%u: got NULL address for %s\n", i, module->Name);
@@ -678,7 +678,7 @@ static void test_query_module(void)
     infoex = (const void *)buffer;
     for (i = 0; infoex->NextOffset; i++)
     {
-        const SYSTEM_MODULE *module = &infoex->BaseInfo;
+        const RTL_PROCESS_MODULE_INFORMATION *module = &infoex->BaseInfo;
 
         ok(module->LoadOrderIndex == i, "%u: got index %u\n", i, module->LoadOrderIndex);
         ok(module->ImageBaseAddress || is_wow64, "%u: got NULL address for %s\n", i, module->Name);
@@ -979,6 +979,7 @@ static void test_query_kerndebug(void)
 {
     NTSTATUS status;
     ULONG ReturnLength;
+    SYSTEM_KERNEL_DEBUGGER_INFORMATION_EX skdi_ex;
     SYSTEM_KERNEL_DEBUGGER_INFORMATION skdi;
 
     status = pNtQuerySystemInformation(SystemKernelDebuggerInformation, &skdi, 0, &ReturnLength);
@@ -991,6 +992,29 @@ static void test_query_kerndebug(void)
     status = pNtQuerySystemInformation(SystemKernelDebuggerInformation, &skdi, sizeof(skdi) + 2, &ReturnLength);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     ok( sizeof(skdi) == ReturnLength, "Inconsistent length %d\n", ReturnLength);
+
+    status = pNtQuerySystemInformation(SystemKernelDebuggerInformationEx, &skdi_ex, 0, &ReturnLength);
+    ok( status == STATUS_INFO_LENGTH_MISMATCH
+            || status == STATUS_NOT_IMPLEMENTED    /* before win7 */
+            || status == STATUS_INVALID_INFO_CLASS /* wow64 on Win10 */,
+            "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
+
+    if (status != STATUS_INFO_LENGTH_MISMATCH)
+    {
+        win_skip( "NtQuerySystemInformation(SystemKernelDebuggerInformationEx) is not implemented.\n" );
+    }
+    else
+    {
+        status = pNtQuerySystemInformation(SystemKernelDebuggerInformationEx, &skdi_ex,
+                sizeof(skdi_ex), &ReturnLength);
+        ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
+        ok( sizeof(skdi_ex) == ReturnLength, "Inconsistent length %d\n", ReturnLength);
+
+        status = pNtQuerySystemInformation(SystemKernelDebuggerInformationEx, &skdi_ex,
+                sizeof(skdi_ex) + 2, &ReturnLength);
+        ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
+        ok( sizeof(skdi_ex) == ReturnLength, "Inconsistent length %d\n", ReturnLength);
+    }
 }
 
 static void test_query_regquota(void)
@@ -3057,6 +3081,8 @@ static void test_thread_lookup(void)
     cid.UniqueThread = ULongToHandle(GetCurrentThreadId());
     status = pNtOpenThread(&handle, THREAD_QUERY_INFORMATION, &attr, &cid);
     ok(!status, "NtOpenThread returned %#x\n", status);
+    status = pNtOpenThread((HANDLE *)0xdeadbee0, THREAD_QUERY_INFORMATION, &attr, &cid);
+    ok( status == STATUS_ACCESS_VIOLATION, "NtOpenThread returned %#x\n", status);
 
     status = pNtQueryObject(handle, ObjectBasicInformation, &obj_info, sizeof(obj_info), NULL);
     ok(!status, "NtQueryObject returned: %#x\n", status);
@@ -3086,16 +3112,21 @@ static void test_thread_lookup(void)
 
     cid.UniqueProcess = ULongToHandle(0xdeadbeef);
     cid.UniqueThread = ULongToHandle(GetCurrentThreadId());
-    status = pNtOpenThread(&handle, THREAD_QUERY_INFORMATION, &attr, &cid);
+    handle = (HANDLE)0xdeadbeef;
+    status = NtOpenThread(&handle, THREAD_QUERY_INFORMATION, &attr, &cid);
     todo_wine
     ok(status == STATUS_INVALID_CID, "NtOpenThread returned %#x\n", status);
+    todo_wine
+    ok( !handle || broken(handle == (HANDLE)0xdeadbeef) /* vista */, "handle set %p\n", handle );
     if (!status) pNtClose(handle);
 
     cid.UniqueProcess = 0;
     cid.UniqueThread = ULongToHandle(0xdeadbeef);
+    handle = (HANDLE)0xdeadbeef;
     status = pNtOpenThread(&handle, THREAD_QUERY_INFORMATION, &attr, &cid);
     ok(status == STATUS_INVALID_CID || broken(status == STATUS_INVALID_PARAMETER) /* winxp */,
        "NtOpenThread returned %#x\n", status);
+    ok( !handle || broken(handle == (HANDLE)0xdeadbeef) /* vista */, "handle set %p\n", handle );
 }
 
 static void test_thread_info(void)
@@ -3232,6 +3263,32 @@ static void test_debug_object(void)
     ok( event.u.LoadDll.fUnicode == TRUE, "event not updated %x\n", event.u.LoadDll.fUnicode );
 }
 
+static void test_process_instrumentation_callback(void)
+{
+    PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION info;
+    NTSTATUS status;
+
+    status = NtSetInformationProcess( GetCurrentProcess(), ProcessInstrumentationCallback, NULL, 0 );
+    ok( status == STATUS_INFO_LENGTH_MISMATCH /* Win10 */ || status == STATUS_INVALID_INFO_CLASS
+            || status == STATUS_NOT_SUPPORTED, "Got unexpected status %#x.\n", status );
+    if (status != STATUS_INFO_LENGTH_MISMATCH)
+    {
+        win_skip( "ProcessInstrumentationCallback is not supported.\n" );
+        return;
+    }
+
+    memset(&info, 0, sizeof(info));
+    status = NtSetInformationProcess( GetCurrentProcess(), ProcessInstrumentationCallback, &info, sizeof(info) );
+    ok( status == STATUS_SUCCESS /* Win 10 */ || broken( status == STATUS_PRIVILEGE_NOT_HELD )
+            || broken( status == STATUS_INFO_LENGTH_MISMATCH ), "Got unexpected status %#x.\n", status );
+
+    memset(&info, 0, sizeof(info));
+    status = NtSetInformationProcess( GetCurrentProcess(), ProcessInstrumentationCallback, &info, 2 * sizeof(info) );
+    ok( status == STATUS_SUCCESS || status == STATUS_INFO_LENGTH_MISMATCH
+            || broken( status == STATUS_PRIVILEGE_NOT_HELD ) /* some versions and machines before Win10 */,
+            "Got unexpected status %#x.\n", status );
+}
+
 START_TEST(info)
 {
     char **argv;
@@ -3298,4 +3355,5 @@ START_TEST(info)
     test_NtGetCurrentProcessorNumber();
 
     test_ThreadEnableAlignmentFaultFixup();
+    test_process_instrumentation_callback();
 }
