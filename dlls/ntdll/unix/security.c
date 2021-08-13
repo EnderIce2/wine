@@ -196,7 +196,7 @@ NTSTATUS WINAPI NtQueryInformationToken(HANDLE token, TOKEN_INFORMATION_CLASS cl
     ULONG len = 0;
     NTSTATUS status = STATUS_SUCCESS;
 
-    const char *priv = getenv("WINEPRIV");
+    const int *priv = getenv("WINEPRIV");
     if (!priv)
     {
         WARN("WINEPRIV IS NULL!! I will use the default REQ function...\n");
