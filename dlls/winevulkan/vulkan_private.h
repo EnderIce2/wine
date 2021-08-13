@@ -164,39 +164,6 @@ typedef struct VkImportMemoryFdInfoKHR
     int                                   fd;
 } VkImportMemoryFdInfoKHR;
 
-typedef struct VkExportMemoryWin32HandleInfoKHR
-{
-    VkStructureType               sType;
-    const void*                   pNext;
-    const SECURITY_ATTRIBUTES*    pAttributes;
-    DWORD                         dwAccess;
-    LPCWSTR                       name;
-} VkExportMemoryWin32HandleInfoKHR;
-
-typedef struct VkImportMemoryWin32HandleInfoKHR
-{
-    VkStructureType                       sType;
-    const void*                           pNext;
-    VkExternalMemoryHandleTypeFlagBits    handleType;
-    HANDLE                                handle;
-    LPCWSTR                               name;
-} VkImportMemoryWin32HandleInfoKHR;
-
-typedef struct VkMemoryGetWin32HandleInfoKHR
-{
-    VkStructureType                       sType;
-    const void*                           pNext;
-    VkDeviceMemory                        memory;
-    VkExternalMemoryHandleTypeFlagBits    handleType;
-} VkMemoryGetWin32HandleInfoKHR;
-
-typedef struct VkMemoryWin32HandlePropertiesKHR
-{
-    VkStructureType    sType;
-    void*              pNext;
-    uint32_t           memoryTypeBits;
-} VkMemoryWin32HandlePropertiesKHR;
-
 typedef struct VkMemoryGetFdInfoKHR
 {
     VkStructureType                       sType;
