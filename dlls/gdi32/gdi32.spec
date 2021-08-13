@@ -44,7 +44,7 @@
 @ stdcall CreateColorSpaceA(ptr)
 @ stdcall CreateColorSpaceW(ptr)
 @ stdcall CreateCompatibleBitmap(long long long)
-@ stdcall CreateCompatibleDC(long)
+@ stdcall CreateCompatibleDC(long) NtGdiCreateCompatibleDC
 @ stdcall CreateDCA(str str str ptr)
 @ stdcall CreateDCW(wstr wstr wstr ptr)
 @ stdcall CreateDIBPatternBrush(long long)
@@ -181,9 +181,9 @@
 @ stub GdiDeleteLocalDC
 @ stub GdiDeleteLocalObject
 # @ stub GdiDeleteSpoolFileHandle
-@ stdcall GdiDescribePixelFormat(long long long ptr)
+@ stdcall GdiDescribePixelFormat(long long long ptr) NtGdiDescribePixelFormat
 @ stdcall GdiDllInitialize(ptr long ptr)
-@ stdcall GdiDrawStream(long long ptr)
+@ stdcall GdiDrawStream(long long ptr) NtGdiDrawStream
 # @ stub GdiEndDocEMF
 # @ stub GdiEndPageEMF
 @ stdcall GdiEntry13()
@@ -230,7 +230,7 @@
 @ stub GdiSetServerAttr
 # @ stub GdiStartDocEMF
 # @ stub GdiStartPageEMF
-@ stdcall GdiSwapBuffers(long)
+@ stdcall GdiSwapBuffers(long) NtGdiSwapBuffers
 @ stdcall GdiTransparentBlt(long long long long long long long long long long long)
 # @ stub GdiValidateHandle
 @ stub GdiWinWatchClose
@@ -327,7 +327,7 @@
 @ stdcall GetOutlineTextMetricsW(long long ptr)
 @ stdcall GetPaletteEntries(long long long ptr)
 @ stdcall GetPath(long ptr ptr long)
-@ stdcall GetPixel(long long long)
+@ stdcall GetPixel(long long long) NtGdiGetPixel
 @ stdcall GetPixelFormat(long)
 @ stdcall GetPolyFillMode(long)
 @ stdcall GetROP2(long)

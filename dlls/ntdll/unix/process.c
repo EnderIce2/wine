@@ -1485,6 +1485,17 @@ NTSTATUS WINAPI NtSetInformationProcess( HANDLE handle, PROCESSINFOCLASS class, 
         }
         break;
 
+    case ProcessInstrumentationCallback:
+    {
+        PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION *instr = info;
+
+        FIXME( "ProcessInstrumentationCallback stub.\n" );
+
+        if (size < sizeof(*instr)) return STATUS_INFO_LENGTH_MISMATCH;
+        ret = STATUS_SUCCESS;
+        break;
+    }
+
     case ProcessThreadStackAllocation:
     {
         void *addr = NULL;
@@ -1534,6 +1545,8 @@ NTSTATUS WINAPI NtOpenProcess( HANDLE *handle, ACCESS_MASK access,
                                const OBJECT_ATTRIBUTES *attr, const CLIENT_ID *id )
 {
     NTSTATUS status;
+
+    *handle = 0;
 
     SERVER_START_REQ( open_process )
     {
