@@ -751,11 +751,6 @@ static HFONT CDECL nulldrv_SelectFont( PHYSDEV dev, HFONT font, UINT *aa_flags )
     return font;
 }
 
-static HPALETTE CDECL nulldrv_SelectPalette( PHYSDEV dev, HPALETTE palette, BOOL bkgnd )
-{
-    return palette;
-}
-
 static HPEN CDECL nulldrv_SelectPen( PHYSDEV dev, HPEN pen, const struct brush_pattern *pattern )
 {
     return pen;
@@ -785,31 +780,10 @@ static void CDECL nulldrv_SetDeviceClipping( PHYSDEV dev, HRGN rgn )
 {
 }
 
-static DWORD CDECL nulldrv_SetLayout( PHYSDEV dev, DWORD layout )
-{
-    DC *dc = get_nulldrv_dc( dev );
-    DWORD old_layout;
-
-    old_layout = dc->attr->layout;
-    dc->attr->layout = layout;
-    if (layout != old_layout)
-    {
-        if (layout & LAYOUT_RTL) dc->attr->map_mode = MM_ANISOTROPIC;
-        DC_UpdateXforms( dc );
-    }
-
-    return old_layout;
-}
-
 static BOOL CDECL nulldrv_SetDeviceGammaRamp( PHYSDEV dev, void *ramp )
 {
     SetLastError( ERROR_INVALID_PARAMETER );
     return FALSE;
-}
-
-static DWORD CDECL nulldrv_SetMapperFlags( PHYSDEV dev, DWORD flags )
-{
-    return flags;
 }
 
 static COLORREF CDECL nulldrv_SetPixel( PHYSDEV dev, INT x, INT y, COLORREF color )
@@ -817,19 +791,9 @@ static COLORREF CDECL nulldrv_SetPixel( PHYSDEV dev, INT x, INT y, COLORREF colo
     return color;
 }
 
-static INT CDECL nulldrv_SetTextCharacterExtra( PHYSDEV dev, INT extra )
-{
-    return extra;
-}
-
 static COLORREF CDECL nulldrv_SetTextColor( PHYSDEV dev, COLORREF color )
 {
     return color;
-}
-
-static BOOL CDECL nulldrv_SetTextJustification( PHYSDEV dev, INT extra, INT breaks )
-{
-    return TRUE;
 }
 
 static INT CDECL nulldrv_StartDoc( PHYSDEV dev, const DOCINFOW *info )
@@ -890,11 +854,9 @@ const struct gdi_dc_funcs null_driver =
     nulldrv_EndPath,                    /* pEndPath */
     nulldrv_EnumFonts,                  /* pEnumFonts */
     nulldrv_EnumICMProfiles,            /* pEnumICMProfiles */
-    nulldrv_ExcludeClipRect,            /* pExcludeClipRect */
     nulldrv_ExtDeviceMode,              /* pExtDeviceMode */
     nulldrv_ExtEscape,                  /* pExtEscape */
     nulldrv_ExtFloodFill,               /* pExtFloodFill */
-    nulldrv_ExtSelectClipRgn,           /* pExtSelectClipRgn */
     nulldrv_ExtTextOut,                 /* pExtTextOut */
     nulldrv_FillPath,                   /* pFillPath */
     nulldrv_FillRgn,                    /* pFillRgn */
@@ -927,14 +889,10 @@ const struct gdi_dc_funcs null_driver =
     nulldrv_GetTextFace,                /* pGetTextFace */
     nulldrv_GetTextMetrics,             /* pGetTextMetrics */
     nulldrv_GradientFill,               /* pGradientFill */
-    nulldrv_IntersectClipRect,          /* pIntersectClipRect */
     nulldrv_InvertRgn,                  /* pInvertRgn */
     nulldrv_LineTo,                     /* pLineTo */
     nulldrv_ModifyWorldTransform,       /* pModifyWorldTransform */
     nulldrv_MoveTo,                     /* pMoveTo */
-    nulldrv_OffsetClipRgn,              /* pOffsetClipRgn */
-    nulldrv_OffsetViewportOrgEx,        /* pOffsetViewportOrg */
-    nulldrv_OffsetWindowOrgEx,          /* pOffsetWindowOrg */
     nulldrv_PaintRgn,                   /* pPaintRgn */
     nulldrv_PatBlt,                     /* pPatBlt */
     nulldrv_Pie,                        /* pPie */
@@ -951,13 +909,10 @@ const struct gdi_dc_funcs null_driver =
     nulldrv_ResetDC,                    /* pResetDC */
     nulldrv_RestoreDC,                  /* pRestoreDC */
     nulldrv_RoundRect,                  /* pRoundRect */
-    nulldrv_ScaleViewportExtEx,         /* pScaleViewportExt */
-    nulldrv_ScaleWindowExtEx,           /* pScaleWindowExt */
     nulldrv_SelectBitmap,               /* pSelectBitmap */
     nulldrv_SelectBrush,                /* pSelectBrush */
     nulldrv_SelectClipPath,             /* pSelectClipPath */
     nulldrv_SelectFont,                 /* pSelectFont */
-    nulldrv_SelectPalette,              /* pSelectPalette */
     nulldrv_SelectPen,                  /* pSelectPen */
     nulldrv_SetBkColor,                 /* pSetBkColor */
     nulldrv_SetBoundsRect,              /* pSetBoundsRect */
@@ -966,17 +921,8 @@ const struct gdi_dc_funcs null_driver =
     nulldrv_SetDIBitsToDevice,          /* pSetDIBitsToDevice */
     nulldrv_SetDeviceClipping,          /* pSetDeviceClipping */
     nulldrv_SetDeviceGammaRamp,         /* pSetDeviceGammaRamp */
-    nulldrv_SetLayout,                  /* pSetLayout */
-    nulldrv_SetMapMode,                 /* pSetMapMode */
-    nulldrv_SetMapperFlags,             /* pSetMapperFlags */
     nulldrv_SetPixel,                   /* pSetPixel */
-    nulldrv_SetTextCharacterExtra,      /* pSetTextCharacterExtra */
     nulldrv_SetTextColor,               /* pSetTextColor */
-    nulldrv_SetTextJustification,       /* pSetTextJustification */
-    nulldrv_SetViewportExtEx,           /* pSetViewportExt */
-    nulldrv_SetViewportOrgEx,           /* pSetViewportOrg */
-    nulldrv_SetWindowExtEx,             /* pSetWindowExt */
-    nulldrv_SetWindowOrgEx,             /* pSetWindowOrg */
     nulldrv_SetWorldTransform,          /* pSetWorldTransform */
     nulldrv_StartDoc,                   /* pStartDoc */
     nulldrv_StartPage,                  /* pStartPage */

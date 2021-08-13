@@ -114,7 +114,7 @@ static const struct gdi_dc_funcs MFDRV_Funcs =
     MFDRV_CreateCompatibleDC,        /* pCreateCompatibleDC */
     NULL,                            /* pCreateDC */
     MFDRV_DeleteDC,                  /* pDeleteDC */
-    MFDRV_DeleteObject,              /* pDeleteObject */
+    NULL,                            /* pDeleteObject */
     NULL,                            /* pDeviceCapabilities */
     NULL,                            /* pEllipse */
     NULL,                            /* pEndDoc */
@@ -122,11 +122,9 @@ static const struct gdi_dc_funcs MFDRV_Funcs =
     MFDRV_EndPath,                   /* pEndPath */
     NULL,                            /* pEnumFonts */
     NULL,                            /* pEnumICMProfiles */
-    MFDRV_ExcludeClipRect,           /* pExcludeClipRect */
     NULL,                            /* pExtDeviceMode */
     MFDRV_ExtEscape,                 /* pExtEscape */
     NULL,                            /* pExtFloodFill */
-    MFDRV_ExtSelectClipRgn,          /* pExtSelectClipRgn */
     NULL,                            /* pExtTextOut */
     MFDRV_FillPath,                  /* pFillPath */
     MFDRV_FillRgn,                   /* pFillRgn */
@@ -159,16 +157,12 @@ static const struct gdi_dc_funcs MFDRV_Funcs =
     NULL,                            /* pGetTextFace */
     NULL,                            /* pGetTextMetrics */
     NULL,                            /* pGradientFill */
-    MFDRV_IntersectClipRect,         /* pIntersectClipRect */
     NULL,                            /* pInvertRgn */
     NULL,                            /* pLineTo */
     NULL,                            /* pModifyWorldTransform */
     NULL,                            /* pMoveTo */
-    MFDRV_OffsetClipRgn,             /* pOffsetClipRgn */
-    MFDRV_OffsetViewportOrgEx,       /* pOffsetViewportOrgEx */
-    MFDRV_OffsetWindowOrgEx,         /* pOffsetWindowOrgEx */
     NULL,                            /* pPaintRgn */
-    MFDRV_PatBlt,                    /* pPatBlt */
+    NULL,                            /* pPatBlt */
     NULL,                            /* pPie */
     MFDRV_PolyBezier,                /* pPolyBezier */
     MFDRV_PolyBezierTo,              /* pPolyBezierTo */
@@ -178,19 +172,16 @@ static const struct gdi_dc_funcs MFDRV_Funcs =
     NULL,                            /* pPolylineTo */
     NULL,                            /* pPutImage */
     NULL,                            /* pRealizeDefaultPalette */
-    MFDRV_RealizePalette,            /* pRealizePalette */
+    NULL,                            /* pRealizePalette */
     NULL,                            /* pRectangle */
     NULL,                            /* pResetDC */
     MFDRV_RestoreDC,                 /* pRestoreDC */
     NULL,                            /* pRoundRect */
-    MFDRV_ScaleViewportExtEx,        /* pScaleViewportExtEx */
-    MFDRV_ScaleWindowExtEx,          /* pScaleWindowExtEx */
-    MFDRV_SelectBitmap,              /* pSelectBitmap */
-    MFDRV_SelectBrush,               /* pSelectBrush */
+    NULL,                            /* pSelectBitmap */
+    NULL,                            /* pSelectBrush */
     MFDRV_SelectClipPath,            /* pSelectClipPath */
-    MFDRV_SelectFont,                /* pSelectFont */
-    MFDRV_SelectPalette,             /* pSelectPalette */
-    MFDRV_SelectPen,                 /* pSelectPen */
+    NULL,                            /* pSelectFont */
+    NULL,                            /* pSelectPen */
     MFDRV_SetBkColor,                /* pSetBkColor */
     MFDRV_SetBoundsRect,             /* pSetBoundsRect */
     MFDRV_SetDCBrushColor,           /* pSetDCBrushColor*/
@@ -198,21 +189,12 @@ static const struct gdi_dc_funcs MFDRV_Funcs =
     MFDRV_SetDIBitsToDevice,         /* pSetDIBitsToDevice */
     NULL,                            /* pSetDeviceClipping */
     NULL,                            /* pSetDeviceGammaRamp */
-    MFDRV_SetLayout,                 /* pSetLayout */
-    MFDRV_SetMapMode,                /* pSetMapMode */
-    MFDRV_SetMapperFlags,            /* pSetMapperFlags */
     NULL,                            /* pSetPixel */
-    MFDRV_SetTextCharacterExtra,     /* pSetTextCharacterExtra */
     MFDRV_SetTextColor,              /* pSetTextColor */
-    MFDRV_SetTextJustification,      /* pSetTextJustification */
-    MFDRV_SetViewportExtEx,          /* pSetViewportExtEx */
-    MFDRV_SetViewportOrgEx,          /* pSetViewportOrgEx */
-    MFDRV_SetWindowExtEx,            /* pSetWindowExtEx */
-    MFDRV_SetWindowOrgEx,            /* pSetWindowOrgEx */
     NULL,                            /* pSetWorldTransform */
     NULL,                            /* pStartDoc */
     NULL,                            /* pStartPage */
-    MFDRV_StretchBlt,                /* pStretchBlt */
+    NULL,                            /* pStretchBlt */
     MFDRV_StretchDIBits,             /* pStretchDIBits */
     MFDRV_StrokeAndFillPath,         /* pStrokeAndFillPath */
     MFDRV_StrokePath,                /* pStrokePath */
@@ -266,7 +248,7 @@ static DC *MFDRV_AllocMetaFile(void)
     physDev->mh->mtMaxRecord    = 0;
     physDev->mh->mtNoParameters = 0;
 
-    SetVirtualResolution( physDev->dev.hdc, 0, 0, 0, 0);
+    NtGdiSetVirtualResolution( physDev->dev.hdc, 0, 0, 0, 0);
 
     return dc;
 }
@@ -324,6 +306,9 @@ HDC WINAPI CreateMetaFileW( LPCWSTR filename )
     if (!(dc = MFDRV_AllocMetaFile())) return 0;
     physDev = (METAFILEDRV_PDEVICE *)dc->physDev;
     physDev->mh->mtType = METAFILE_MEMORY;
+    physDev->pen   = GetStockObject( BLACK_PEN );
+    physDev->brush = GetStockObject( WHITE_BRUSH );
+    physDev->font  = GetStockObject( DEVICE_DEFAULT_FONT );
 
     if (filename)  /* disk based metafile */
     {

@@ -1305,6 +1305,7 @@ enable_dxerr8
 enable_dxerr9
 enable_dxgi
 enable_dxguid
+enable_dxtrans
 enable_dxva2
 enable_esent
 enable_evr
@@ -9472,7 +9473,7 @@ fi
       WINEPRELOADER_LDFLAGS="-static -nostartfiles -nodefaultlibs -Wl,-Ttext=0x7d400000"
 
       case $host_cpu in
-        *i[3456789]86* | x86_64 | *aarch64*)
+        *i[3456789]86* | x86_64 | *aarch64* | arm*)
           { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether the compiler supports -Wl,-Ttext-segment=0x7bc00000" >&5
 $as_echo_n "checking whether the compiler supports -Wl,-Ttext-segment=0x7bc00000... " >&6; }
 if ${ac_cv_cflags__Wl__Ttext_segment_0x7bc00000+:} false; then :
@@ -18024,7 +18025,7 @@ esac
 case $host_os in
   linux*)
     case $host_cpu in
-      *i[3456789]86*|x86_64*|*aarch64*)
+      *i[3456789]86*|x86_64*|*aarch64*|arm*)
         test "$wine_binary" = wine || wine_fn_append_file CONFIGURE_TARGETS "loader/wine-preloader"
         WINELOADER_PROGRAMS="$WINELOADER_PROGRAMS $wine_binary-preloader"
         ;;
@@ -18067,6 +18068,7 @@ for ac_func in \
 	setprogname \
 	sigprocmask \
 	symlink \
+	sysinfo \
 	tcdrain \
 	thr_kill2
 
@@ -19366,6 +19368,21 @@ _ACEOF
 fi
 
 
+ac_fn_c_check_member "$LINENO" "struct in6_pktinfo" "ipi6_addr" "ac_cv_member_struct_in6_pktinfo_ipi6_addr" "#ifdef HAVE_NETINET_IN_H
+#define _GNU_SOURCE
+#include <netinet/in.h>
+#endif
+"
+if test "x$ac_cv_member_struct_in6_pktinfo_ipi6_addr" = xyes; then :
+
+cat >>confdefs.h <<_ACEOF
+#define HAVE_STRUCT_IN6_PKTINFO_IPI6_ADDR 1
+_ACEOF
+
+
+fi
+
+
 ac_fn_c_check_member "$LINENO" "struct ipstat" "ips_total" "ac_cv_member_struct_ipstat_ips_total" "#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
@@ -20529,6 +20546,7 @@ wine_fn_config_makefile dlls/dxerr9 enable_dxerr9
 wine_fn_config_makefile dlls/dxgi enable_dxgi
 wine_fn_config_makefile dlls/dxgi/tests enable_tests
 wine_fn_config_makefile dlls/dxguid enable_dxguid
+wine_fn_config_makefile dlls/dxtrans enable_dxtrans
 wine_fn_config_makefile dlls/dxva2 enable_dxva2
 wine_fn_config_makefile dlls/dxva2/tests enable_tests
 wine_fn_config_makefile dlls/esent enable_esent

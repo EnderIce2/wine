@@ -67,8 +67,9 @@ typedef struct _GDI_HANDLE_ENTRY
 /* Wine extension, native uses NTGDI_OBJ_DC */
 #define NTGDI_OBJ_MEMDC           0x41
 
-#define NTGDI_HANDLE_TYPE_SHIFT  16
-#define NTGDI_HANDLE_TYPE_MASK   0x007f0000
+#define NTGDI_HANDLE_TYPE_SHIFT    16
+#define NTGDI_HANDLE_TYPE_MASK     0x007f0000
+#define NTGDI_HANDLE_STOCK_OBJECT  0x00800000
 
 typedef struct _GDI_SHARED_MEMORY
 {
@@ -93,11 +94,23 @@ enum
     NtGdiPolyPolygonRgn,
 };
 
+enum
+{
+    NtGdiLPtoDP,
+    NtGdiDPtoLP,
+};
+
+enum
+{
+    NtGdiSetMapMode = 8,
+};
+
 /* structs not compatible with native Windows */
 #ifdef __WINESRC__
 
 typedef struct DC_ATTR
 {
+    HDC       hdc;                 /* handle to self */
     LONG      disabled;            /* disabled flag, controled by DCHF_(DISABLE|ENABLE)DC */
     COLORREF  background_color;
     COLORREF  brush_color;
@@ -114,7 +127,17 @@ typedef struct DC_ATTR
     WORD      rel_abs_mode;
     WORD      stretch_blt_mode;
     INT       map_mode;
+    INT       char_extra;
+    DWORD     mapper_flags;        /* font mapper flags */
+    RECT      vis_rect;            /* visible rectangle in screen coords */
     FLOAT     miter_limit;
+    POINT     brush_org;           /* brush origin */
+    POINT     wnd_org;             /* window origin */
+    SIZE      wnd_ext;             /* window extent */
+    POINT     vport_org;           /* viewport origin */
+    SIZE      vport_ext;           /* viewport extent */
+    SIZE      virtual_res;
+    SIZE      virtual_size;
     void     *emf;
 } DC_ATTR;
 
@@ -122,14 +145,20 @@ typedef struct DC_ATTR
 
 INT      WINAPI NtGdiAbortDoc( HDC hdc );
 BOOL     WINAPI NtGdiAbortPath( HDC hdc );
+BOOL     WINAPI NtGdiAlphaBlend( HDC hdc_dst, int x_dst, int y_dst, int width_dst, int height_dst,
+                                 HDC hdc_src, int x_src, int y_src, int width_src, int height_src,
+                                 BLENDFUNCTION blend_function, HANDLE xform );
 BOOL     WINAPI NtGdiAngleArc( HDC hdc, INT x, INT y, DWORD radius, FLOAT start_angle,
                                FLOAT sweep_angle );
 BOOL     WINAPI NtGdiArcInternal( UINT type, HDC hdc, INT left, INT top, INT right, INT bottom,
                                   INT xstart, INT ystart, INT xend, INT yend );
 BOOL     WINAPI NtGdiBeginPath( HDC hdc );
+BOOL     WINAPI NtGdiBitBlt( HDC hdc_dst, INT x_dst, INT y_dst, INT width, INT height, HDC hdc_src,
+                             INT x_src, INT y_src, DWORD rop, DWORD bk_color, FLONG fl );
 BOOL     WINAPI NtGdiCancelDC( HDC hdc );
 BOOL     WINAPI NtGdiCloseFigure( HDC hdc );
 INT      WINAPI NtGdiCombineRgn( HRGN dest, HRGN src1, HRGN src2, INT mode );
+BOOL     WINAPI NtGdiComputeXformCoefficients( HDC hdc );
 HBITMAP  WINAPI NtGdiCreateBitmap( INT width, INT height, UINT planes,
                                    UINT bpp, const void *bits );
 HBRUSH   WINAPI NtGdiCreateHatchBrushInternal( INT style, COLORREF color, BOOL pen );
@@ -203,6 +232,7 @@ BOOL     WINAPI NtGdiLineTo( HDC hdc, INT x, INT y );
 BOOL     WINAPI NtGdiMoveTo( HDC hdc, INT x, INT y, POINT *pt );
 INT      WINAPI NtGdiOffsetClipRgn( HDC hdc, INT x, INT y );
 INT      WINAPI NtGdiOffsetRgn( HRGN hrgn, INT x, INT y );
+BOOL     WINAPI NtGdiPatBlt( HDC hdc, INT left, INT top, INT width, INT height, DWORD rop );
 HRGN     WINAPI NtGdiPathToRegion( HDC hdc );
 BOOL     WINAPI NtGdiPolyDraw(HDC hdc, const POINT *points, const BYTE *types, DWORD count );
 ULONG    WINAPI NtGdiPolyPolyDraw( HDC hdc, const POINT *points, const UINT *counts,
@@ -231,7 +261,7 @@ BOOL     WINAPI NtGdiSetBitmapDimension( HBITMAP hbitmap, INT x, INT y, SIZE *pr
 BOOL     WINAPI NtGdiSetBrushOrg( HDC hdc, INT x, INT y, POINT *prev_org );
 UINT     WINAPI NtGdiSetBoundsRect( HDC hdc, const RECT *rect, UINT flags );
 BOOL     WINAPI NtGdiSetDeviceGammaRamp( HDC hdc, void *ptr );
-DWORD    WINAPI NtGdiSetLayout( HDC hdc, DWORD layout );
+DWORD    WINAPI NtGdiSetLayout( HDC hdc, LONG wox, DWORD layout );
 INT      WINAPI NtGdiSetMetaRgn( HDC hdc );
 BOOL     WINAPI NtGdiSetMiterLimit( HDC hdc, FLOAT limit, FLOAT *prev_limit );
 COLORREF WINAPI NtGdiSetPixel( HDC hdc, INT x, INT y, COLORREF color );
@@ -242,9 +272,13 @@ BOOL     WINAPI NtGdiSetVirtualResolution( HDC hdc, DWORD horz_res, DWORD vert_r
                                            DWORD horz_size, DWORD vert_size );
 INT      WINAPI NtGdiStartDoc( HDC hdc, const DOCINFOW *doc );
 INT      WINAPI NtGdiStartPage( HDC hdc );
+BOOL     WINAPI NtGdiStretchBlt( HDC hdc, INT x_dst, INT y_dst, INT width_dst, INT height_dst,
+                                 HDC hdc_src, INT x_src, INT y_src, INT width_src, INT height_src,
+                                 DWORD rop, COLORREF bk_color );
 BOOL     WINAPI NtGdiStrokePath( HDC hdc );
 BOOL     WINAPI NtGdiStrokeAndFillPath( HDC hdc );
-BOOL     WINAPI NtGdiTransformPoints( HDC hdc, POINT *points, INT count, UINT mode );
+BOOL     WINAPI NtGdiTransformPoints( HDC hdc, const POINT *points_in, POINT *points_out,
+                                      INT count, UINT mode );
 BOOL     WINAPI NtGdiUnrealizeObject( HGDIOBJ obj );
 BOOL     WINAPI NtGdiWidenPath( HDC hdc );
 
