@@ -73,33 +73,33 @@ NTSTATUS CDECL __wine_create_gpu_resource(PHANDLE handle, PHANDLE kmt_handle, AC
 }
 
 /* Opens a GPU-resource handle from a KMT handle or name */
-NTSTATUS CDECL __wine_open_gpu_resource(HANDLE kmt_handle, OBJECT_ATTRIBUTES *attr, DWORD access, PHANDLE handle )
-{
-    NTSTATUS ret;
+// NTSTATUS CDECL __wine_open_gpu_resource(HANDLE kmt_handle, OBJECT_ATTRIBUTES *attr, DWORD access, PHANDLE handle )
+// {
+//     NTSTATUS ret;
 
-    if ((kmt_handle && attr) || !handle)
-        return STATUS_INVALID_PARAMETER;
+//     if ((kmt_handle && attr) || !handle)
+//         return STATUS_INVALID_PARAMETER;
 
-    SERVER_START_REQ( open_gpu_resource )
-    {
-        req->access = access;
-        req->kmt_handle = wine_server_obj_handle( kmt_handle );
-        if (attr)
-        {
-            req->attributes = attr->Attributes;
-            req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
-            if (attr->ObjectName)
-                wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
-        }
-        if (!(ret = wine_server_call( req )))
-            *handle = wine_server_ptr_handle( reply->handle );
-        else
-            *handle = INVALID_HANDLE_VALUE;
-    }
-    SERVER_END_REQ;
+//     SERVER_START_REQ( open_gpu_resource )
+//     {
+//         req->access = access;
+//         req->kmt_handle = wine_server_obj_handle( kmt_handle );
+//         if (attr)
+//         {
+//             req->attributes = attr->Attributes;
+//             req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+//             if (attr->ObjectName)
+//                 wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
+//         }
+//         if (!(ret = wine_server_call( req )))
+//             *handle = wine_server_ptr_handle( reply->handle );
+//         else
+//             *handle = INVALID_HANDLE_VALUE;
+//     }
+//     SERVER_END_REQ;
 
-    return ret;
-}
+//     return ret;
+// }
 
 /* Gets an FD from GPU resource handle */
 NTSTATUS CDECL __wine_get_gpu_resource_fd(HANDLE handle, int *fd, int *needs_close)

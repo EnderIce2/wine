@@ -1201,10 +1201,10 @@ void WINAPI wine_vkDestroyCommandPool(VkDevice device, VkCommandPool handle,
     free(pool);
 }
 
-extern NTSTATUS CDECL __wine_create_gpu_resource(PHANDLE handle, PHANDLE kmt_handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr, int fd );
-extern NTSTATUS CDECL __wine_open_gpu_resource(HANDLE kmt_handle, OBJECT_ATTRIBUTES *attr, DWORD access, PHANDLE handle );
-extern NTSTATUS CDECL __wine_get_gpu_resource_fd(HANDLE handle, int *fd, int *needs_close);
-extern NTSTATUS CDECL __wine_get_gpu_resource_info(HANDLE handle, HANDLE *kmt_handle, void *user_data_buf, unsigned int *user_data_len);
+// extern NTSTATUS CDECL __wine_create_gpu_resource(PHANDLE handle, PHANDLE kmt_handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr, int fd );
+// extern NTSTATUS CDECL __wine_open_gpu_resource(HANDLE kmt_handle, OBJECT_ATTRIBUTES *attr, DWORD access, PHANDLE handle );
+// extern NTSTATUS CDECL __wine_get_gpu_resource_fd(HANDLE handle, int *fd, int *needs_close);
+// extern NTSTATUS CDECL __wine_get_gpu_resource_info(HANDLE handle, HANDLE *kmt_handle, void *user_data_buf, unsigned int *user_data_len);
 
 static NTSTATUS server_create_dxgi_resource( PHANDLE handle, PHANDLE kmt_handle, int fd, DWORD access, SECURITY_ATTRIBUTES *sa, LPCWSTR name )
 {
@@ -1225,197 +1225,197 @@ static NTSTATUS server_create_dxgi_resource( PHANDLE handle, PHANDLE kmt_handle,
     return __wine_create_gpu_resource(handle, kmt_handle, access, &attr, fd);
 }
 
-static NTSTATUS server_open_dxgi_resource( PHANDLE handle, LPCWSTR name, DWORD access)
-{
-    OBJECT_ATTRIBUTES attr;
+// static NTSTATUS server_open_dxgi_resource( PHANDLE handle, LPCWSTR name, DWORD access)
+// {
+//     OBJECT_ATTRIBUTES attr;
 
-    attr.Length = sizeof(attr);
-    attr.RootDirectory = 0;
-    attr.ObjectName = NULL;
-    attr.Attributes = 0;
-    attr.SecurityDescriptor = 0;
-    attr.SecurityQualityOfService = NULL;
-    if (name)
-    {
-        RtlInitUnicodeString( attr.ObjectName, name );
-        attr.RootDirectory = /*TODO*/0/*TODO*/;
-    }
+//     attr.Length = sizeof(attr);
+//     attr.RootDirectory = 0;
+//     attr.ObjectName = NULL;
+//     attr.Attributes = 0;
+//     attr.SecurityDescriptor = 0;
+//     attr.SecurityQualityOfService = NULL;
+//     if (name)
+//     {
+//         RtlInitUnicodeString( attr.ObjectName, name );
+//         attr.RootDirectory = /*TODO*/0/*TODO*/;
+//     }
 
-    return __wine_open_gpu_resource(NULL, &attr, access, handle);
-}
+//     return __wine_open_gpu_resource(NULL, &attr, access, handle);
+// }
 
-VkResult WINAPI wine_vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo *allocate_info, const VkAllocationCallbacks *allocator, VkDeviceMemory *memory_out)
-{
-    struct wine_dev_mem *object;
-    VkMemoryAllocateInfo allocate_info_host = *allocate_info;
-    VkBaseOutStructure *header;
-    VkExternalMemoryHandleTypeFlags handle_types = 0;
-    VkExportMemoryAllocateInfo *export_info = NULL;
-    VkExportMemoryWin32HandleInfoKHR *handle_export_info = NULL;
-    VkImportMemoryFdInfoKHR fd_import_info;
-    int needs_close = TRUE;
-    VkResult res;
+// VkResult WINAPI wine_vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo *allocate_info, const VkAllocationCallbacks *allocator, VkDeviceMemory *memory_out)
+// {
+//     struct wine_dev_mem *object;
+//     VkMemoryAllocateInfo allocate_info_host = *allocate_info;
+//     VkBaseOutStructure *header;
+//     VkExternalMemoryHandleTypeFlags handle_types = 0;
+//     VkExportMemoryAllocateInfo *export_info = NULL;
+//     VkExportMemoryWin32HandleInfoKHR *handle_export_info = NULL;
+//     VkImportMemoryFdInfoKHR fd_import_info;
+//     int needs_close = TRUE;
+//     VkResult res;
 
-    TRACE("%p %p %p %p\n", device, allocate_info, allocator, memory_out);
+//     TRACE("%p %p %p %p\n", device, allocate_info, allocator, memory_out);
 
-    if (allocator)
-        FIXME("Support for allocation callbacks not implemented yet\n");
+//     if (allocator)
+//         FIXME("Support for allocation callbacks not implemented yet\n");
 
-    if (!(object = heap_alloc_zero(sizeof(*object))))
-        return VK_ERROR_OUT_OF_HOST_MEMORY;
+//     if (!(object = heap_alloc_zero(sizeof(*object))))
+//         return VK_ERROR_OUT_OF_HOST_MEMORY;
 
-    object->dev_mem = VK_NULL_HANDLE;
-    object->handle = INVALID_HANDLE_VALUE;
-    object->kmt_handle = INVALID_HANDLE_VALUE;
-    fd_import_info.fd = -1;
+//     object->dev_mem = VK_NULL_HANDLE;
+//     object->handle = INVALID_HANDLE_VALUE;
+//     object->kmt_handle = INVALID_HANDLE_VALUE;
+//     fd_import_info.fd = -1;
 
-    /* find and process handle import/export info and grab it */
-    for (header = (void *)allocate_info->pNext; header; header = header->pNext)
-    {
-        switch (header->sType)
-        {
-            case VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO:
-            {
-                export_info = (VkExportMemoryAllocateInfo *)header;
+//     /* find and process handle import/export info and grab it */
+//     for (header = (void *)allocate_info->pNext; header; header = header->pNext)
+//     {
+//         switch (header->sType)
+//         {
+//             case VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO:
+//             {
+//                 export_info = (VkExportMemoryAllocateInfo *)header;
 
-                handle_types = export_info->handleTypes;
-                if (handle_types & (VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT|VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT_BIT))
-                    export_info->handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
-            }break;
-            case VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR:
-            {
-                handle_export_info = (VkExportMemoryWin32HandleInfoKHR *)header;
-            }break;
-            case VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR:
-            {
-                VkImportMemoryWin32HandleInfoKHR *win32_import_info = (VkImportMemoryWin32HandleInfoKHR *)header;
+//                 handle_types = export_info->handleTypes;
+//                 if (handle_types & (VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT|VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT_BIT))
+//                     export_info->handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+//             }break;
+//             case VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR:
+//             {
+//                 handle_export_info = (VkExportMemoryWin32HandleInfoKHR *)header;
+//             }break;
+//             case VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR:
+//             {
+//                 VkImportMemoryWin32HandleInfoKHR *win32_import_info = (VkImportMemoryWin32HandleInfoKHR *)header;
 
-                fd_import_info.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR;
-                fd_import_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+//                 fd_import_info.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR;
+//                 fd_import_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
 
-                /* get the fd from the handle */
-                switch (win32_import_info->handleType)
-                {
-                    case VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT:
-                        if (win32_import_info->handle)
-                            DuplicateHandle( GetCurrentProcess(), win32_import_info->handle, GetCurrentProcess(), &object->handle, 0, FALSE, DUPLICATE_SAME_ACCESS | DUPLICATE_CLOSE_SOURCE);
-                        else if (win32_import_info->name)
-                            server_open_dxgi_resource( &object->handle, win32_import_info->name, DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE );
-                        break;
-                    case VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT_BIT:
-                        __wine_open_gpu_resource( win32_import_info->handle, NULL, DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE, &object->handle );
-                        object->kmt_handle = win32_import_info->handle;
-                        break;
-                    default:
-                        TRACE("Invalid handle type %08x passed in.\n", win32_import_info->handleType);
-                        res = VK_ERROR_INVALID_EXTERNAL_HANDLE;
-                        goto done;
-                }
+//                 /* get the fd from the handle */
+//                 switch (win32_import_info->handleType)
+//                 {
+//                     case VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT:
+//                         if (win32_import_info->handle)
+//                             DuplicateHandle( GetCurrentProcess(), win32_import_info->handle, GetCurrentProcess(), &object->handle, 0, FALSE, DUPLICATE_SAME_ACCESS | DUPLICATE_CLOSE_SOURCE);
+//                         else if (win32_import_info->name)
+//                             server_open_dxgi_resource( &object->handle, win32_import_info->name, DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE );
+//                         break;
+//                     case VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT_BIT:
+//                         __wine_open_gpu_resource( win32_import_info->handle, NULL, DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE, &object->handle );
+//                         object->kmt_handle = win32_import_info->handle;
+//                         break;
+//                     default:
+//                         TRACE("Invalid handle type %08x passed in.\n", win32_import_info->handleType);
+//                         res = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+//                         goto done;
+//                 }
 
-                if (object->handle != INVALID_HANDLE_VALUE)
-                    __wine_get_gpu_resource_fd(object->handle, &fd_import_info.fd, &needs_close);
+//                 if (object->handle != INVALID_HANDLE_VALUE)
+//                     __wine_get_gpu_resource_fd(object->handle, &fd_import_info.fd, &needs_close);
 
-                if (fd_import_info.fd != -1)
-                {
-                    fd_import_info.pNext = allocate_info_host.pNext;
-                    /* we ignore the const because we'll restore it */
-                    allocate_info_host.pNext = &fd_import_info;
+//                 if (fd_import_info.fd != -1)
+//                 {
+//                     fd_import_info.pNext = allocate_info_host.pNext;
+//                     /* we ignore the const because we'll restore it */
+//                     allocate_info_host.pNext = &fd_import_info;
 
-                    /* if the fd needs closing, we can just pass it to vulkan where it can be consumed,
-                    otherwise we need to duplicate it so the cached fd isn't consumed by vulkan */
-                    if (!needs_close)
-                        fd_import_info.fd = dup(fd_import_info.fd);
-                }
-                else
-                {
-                    TRACE("Couldn't access resource handle or name. type=%08x handle=%p name=%s\n", win32_import_info->handleType, win32_import_info->handle,
-                            win32_import_info->name ? debugstr_w(win32_import_info->name) : "");
-                    res = VK_ERROR_INVALID_EXTERNAL_HANDLE;
-                    goto done;
-                }
-            }break;
-            default:
-            {
-                TRACE("Unhandled stype = %08x\n", header->sType);
-            }
-        }
-    }
+//                     /* if the fd needs closing, we can just pass it to vulkan where it can be consumed,
+//                     otherwise we need to duplicate it so the cached fd isn't consumed by vulkan */
+//                     if (!needs_close)
+//                         fd_import_info.fd = dup(fd_import_info.fd);
+//                 }
+//                 else
+//                 {
+//                     TRACE("Couldn't access resource handle or name. type=%08x handle=%p name=%s\n", win32_import_info->handleType, win32_import_info->handle,
+//                             win32_import_info->name ? debugstr_w(win32_import_info->name) : "");
+//                     res = VK_ERROR_INVALID_EXTERNAL_HANDLE;
+//                     goto done;
+//                 }
+//             }break;
+//             default:
+//             {
+//                 TRACE("Unhandled stype = %08x\n", header->sType);
+//             }
+//         }
+//     }
 
-    res = device->funcs.p_vkAllocateMemory(device->device, &allocate_info_host, NULL, &object->dev_mem);
+//     res = device->funcs.p_vkAllocateMemory(device->device, &allocate_info_host, NULL, &object->dev_mem);
 
-    if (res == VK_SUCCESS)
-    {
-        VkDeviceMemory memory = object->dev_mem;
+//     if (res == VK_SUCCESS)
+//     {
+//         VkDeviceMemory memory = object->dev_mem;
 
-        if (export_info && export_info->handleTypes)
-        {
-            if (object->handle != INVALID_HANDLE_VALUE)
-            {
-                /* occurs if the caller imports *and* exports the memory */
-                if (handle_types & VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT_BIT && object->kmt_handle == INVALID_HANDLE_VALUE)
-                    __wine_get_gpu_resource_info(object->handle, &object->kmt_handle, NULL, NULL);
-            } else {
-                int fd;
-                VkMemoryGetFdInfoKHR host_fd_info;
+//         if (export_info && export_info->handleTypes)
+//         {
+//             if (object->handle != INVALID_HANDLE_VALUE)
+//             {
+//                 /* occurs if the caller imports *and* exports the memory */
+//                 if (handle_types & VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT_BIT && object->kmt_handle == INVALID_HANDLE_VALUE)
+//                     __wine_get_gpu_resource_info(object->handle, &object->kmt_handle, NULL, NULL);
+//             } else {
+//                 int fd;
+//                 VkMemoryGetFdInfoKHR host_fd_info;
 
-                /* get an fd to represent it */
+//                 /* get an fd to represent it */
 
-                host_fd_info.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR;
-                host_fd_info.pNext = NULL;
-                host_fd_info.memory = memory;
-                host_fd_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+//                 host_fd_info.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR;
+//                 host_fd_info.pNext = NULL;
+//                 host_fd_info.memory = memory;
+//                 host_fd_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
 
-                if (device->funcs.p_vkGetMemoryFdKHR(device->device, &host_fd_info, &fd) == VK_SUCCESS)
-                {
-                    LPCWSTR name = handle_export_info ? handle_export_info->name : NULL;
-                    SECURITY_ATTRIBUTES sa = handle_export_info ? (handle_export_info->pAttributes ? *handle_export_info->pAttributes : (SECURITY_ATTRIBUTES){0}) : (SECURITY_ATTRIBUTES){0};
-                    if (sa.bInheritHandle){
-                        sa.bInheritHandle = FALSE;
-                    }
-                    if (!(server_create_dxgi_resource(&object->handle, &object->kmt_handle, fd, object->access, sa.nLength ? &sa : NULL, name)))
-                    {
-                        object->handle_types = handle_types &
-                                            (VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT|VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT_BIT);
-                        TRACE("Device Memory %p set-up to export handle types: %08x\n", object, object->handle_types);
-                    } else {
-                        TRACE("Failed to create server-side dxgi-resource.\n");
-                        close(fd);
-                        res = VK_ERROR_OUT_OF_HOST_MEMORY;
-                        goto done;
-                    }
-                } else {
-                    TRACE("Failed to retrieve FD from native vulkan driver.\n");
-                    res = VK_ERROR_OUT_OF_HOST_MEMORY;
-                    goto done;
-                }
-            }
-            object->access = handle_export_info ? handle_export_info->dwAccess : DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE;
-            object->inherit = handle_export_info ? (handle_export_info->pAttributes ? handle_export_info->pAttributes->bInheritHandle : FALSE) : FALSE;
-        }
+//                 if (device->funcs.p_vkGetMemoryFdKHR(device->device, &host_fd_info, &fd) == VK_SUCCESS)
+//                 {
+//                     LPCWSTR name = handle_export_info ? handle_export_info->name : NULL;
+//                     SECURITY_ATTRIBUTES sa = handle_export_info ? (handle_export_info->pAttributes ? *handle_export_info->pAttributes : (SECURITY_ATTRIBUTES){0}) : (SECURITY_ATTRIBUTES){0};
+//                     if (sa.bInheritHandle){
+//                         sa.bInheritHandle = FALSE;
+//                     }
+//                     if (!(server_create_dxgi_resource(&object->handle, &object->kmt_handle, fd, object->access, sa.nLength ? &sa : NULL, name)))
+//                     {
+//                         object->handle_types = handle_types &
+//                                             (VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT|VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT_BIT);
+//                         TRACE("Device Memory %p set-up to export handle types: %08x\n", object, object->handle_types);
+//                     } else {
+//                         TRACE("Failed to create server-side dxgi-resource.\n");
+//                         close(fd);
+//                         res = VK_ERROR_OUT_OF_HOST_MEMORY;
+//                         goto done;
+//                     }
+//                 } else {
+//                     TRACE("Failed to retrieve FD from native vulkan driver.\n");
+//                     res = VK_ERROR_OUT_OF_HOST_MEMORY;
+//                     goto done;
+//                 }
+//             }
+//             object->access = handle_export_info ? handle_export_info->dwAccess : DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE;
+//             object->inherit = handle_export_info ? (handle_export_info->pAttributes ? handle_export_info->pAttributes->bInheritHandle : FALSE) : FALSE;
+//         }
 
-        *memory_out = wine_dev_mem_to_handle(object);
-    }
-    else
-    {
-        TRACE("vkAllocateMemory failed with %u\n", res);
-        goto done;
-    }
+//         *memory_out = wine_dev_mem_to_handle(object);
+//     }
+//     else
+//     {
+//         TRACE("vkAllocateMemory failed with %u\n", res);
+//         goto done;
+//     }
 
-    done:
-    if (res != VK_SUCCESS)
-    {
-        if (object->dev_mem != VK_NULL_HANDLE)
-            device->funcs.p_vkFreeMemory(device->device, object->dev_mem, NULL);
-        if (fd_import_info.fd != -1 && needs_close)
-            close(fd_import_info.fd);
-        if (object->handle != INVALID_HANDLE_VALUE)
-            CloseHandle(object->handle);
-        heap_free(object);
-    }
-    if (export_info)
-        export_info->handleTypes = handle_types;
-    return res;
-}
+//     done:
+//     if (res != VK_SUCCESS)
+//     {
+//         if (object->dev_mem != VK_NULL_HANDLE)
+//             device->funcs.p_vkFreeMemory(device->device, object->dev_mem, NULL);
+//         if (fd_import_info.fd != -1 && needs_close)
+//             close(fd_import_info.fd);
+//         if (object->handle != INVALID_HANDLE_VALUE)
+//             CloseHandle(object->handle);
+//         heap_free(object);
+//     }
+//     if (export_info)
+//         export_info->handleTypes = handle_types;
+//     return res;
+// }
 
 void WINAPI wine_vkFreeMemory(VkDevice device, VkDeviceMemory handle,
         const VkAllocationCallbacks* allocator)

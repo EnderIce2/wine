@@ -208,15 +208,15 @@ NTSTATUS WINAPI NtQueryInformationToken(HANDLE token, TOKEN_INFORMATION_CLASS cl
         {
             WINE_MESSAGE("-> Process will get the privilege from REQ\n");
         }
-        else if (priv == TokenElevationTypeDefault)
+        else if (priv == 1)
         {
             WINE_MESSAGE("-> Process will start with default privilege\n");
         }
-        else if (priv == TokenElevationTypeFull)
+        else if (priv == 2)
         {
             WINE_MESSAGE("-> Process will start with full privilege\n");
         }
-        else if (priv == TokenElevationTypeLimited)
+        else if (priv == 3)
         {
             WINE_MESSAGE("-> Process will start with limited privilege\n");
         }
