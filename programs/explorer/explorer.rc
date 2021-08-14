@@ -31,6 +31,7 @@ STRINGTABLE
     IDS_EXPLORER_TITLE  "Țuică Explorer"
     IDS_PATHBOX_LABEL   "Location:"
     IDS_START_LABEL     "Țuică"
+    IDS_EXPLORER        "Explorer"
     IDS_RUN             "&Run..."
 }
 

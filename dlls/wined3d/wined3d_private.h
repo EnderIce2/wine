@@ -4120,6 +4120,7 @@ static inline void wined3d_resource_acquire(struct wined3d_resource *resource)
 static inline void wined3d_resource_release(struct wined3d_resource *resource)
 {
     LONG refcount = InterlockedDecrement(&resource->access_count);
+    /* TODO: some games will crash somehow */
     assert(refcount >= 0);
 }
 

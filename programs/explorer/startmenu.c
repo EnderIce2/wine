@@ -53,6 +53,7 @@ static struct menu_item public_startmenu;
 static struct menu_item user_startmenu;
 
 #define MENU_ID_RUN 1
+#define MENU_ID_EXPLORER 2
 
 static ULONG copy_pidls(struct menu_item* item, LPITEMIDLIST dest)
 {
@@ -383,6 +384,11 @@ static void run_dialog(void)
     FreeLibrary(hShell32);
 }
 
+static void run_explorer(void)
+{
+    ShellExecuteW(NULL, L"open", L"C:\\windows\\explorer.exe", NULL, NULL, SW_SHOW);
+}
+
 LRESULT menu_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     switch (msg)
@@ -419,6 +425,8 @@ LRESULT menu_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 exec_item(item);
             else if (mii.wID == MENU_ID_RUN)
                 run_dialog();
+            else if (mii.wID == MENU_ID_EXPLORER)
+                run_explorer();
 
             destroy_menus();
 
@@ -433,10 +441,12 @@ void do_startmenu(HWND hwnd)
 {
     LPITEMIDLIST pidl;
     MENUINFO mi;
+    MENUITEMINFOW miiexplorer;
     MENUITEMINFOW mii;
     RECT rc={0,0,0,0};
     TPMPARAMS tpm;
     WCHAR run_label[50];
+    WCHAR explorer_label[50];
 
     destroy_menus();
 
@@ -476,12 +486,17 @@ void do_startmenu(HWND hwnd)
         add_shell_item(&root_menu, pidl);
 
     LoadStringW(NULL, IDS_RUN, run_label, ARRAY_SIZE(run_label));
+    LoadStringW(NULL, IDS_EXPLORER, explorer_label, ARRAY_SIZE(explorer_label));
 
+    miiexplorer.cbSize = sizeof(miiexplorer);
+    miiexplorer.fMask = MIIM_STRING|MIIM_ID;
+    miiexplorer.dwTypeData = explorer_label;
+    miiexplorer.wID = MENU_ID_EXPLORER;
+    InsertMenuItemW(root_menu.menuhandle, -1, TRUE, &miiexplorer);
     mii.cbSize = sizeof(mii);
     mii.fMask = MIIM_STRING|MIIM_ID;
     mii.dwTypeData = run_label;
     mii.wID = MENU_ID_RUN;
-
     InsertMenuItemW(root_menu.menuhandle, -1, TRUE, &mii);
 
     mi.cbSize = sizeof(mi);
