@@ -578,10 +578,10 @@ MFLAGS=
 MAKEFLAGS=
 
 # Identity of this package.
-PACKAGE_NAME='Wine'
-PACKAGE_TARNAME='wine'
+PACKAGE_NAME='Țuică'
+PACKAGE_TARNAME='tuica'
 PACKAGE_VERSION='6.15'
-PACKAGE_STRING='Wine 6.15'
+PACKAGE_STRING='Țuică 6.15'
 PACKAGE_BUGREPORT='wine-devel@winehq.org'
 PACKAGE_URL='https://www.winehq.org'
 
@@ -1404,6 +1404,7 @@ enable_iprop
 enable_irprops_cpl
 enable_itircl
 enable_itss
+enable_tuica_cpl
 enable_joy_cpl
 enable_jscript
 enable_jsproxy
@@ -20668,6 +20669,7 @@ wine_fn_config_makefile dlls/irprops.cpl enable_irprops_cpl
 wine_fn_config_makefile dlls/itircl enable_itircl
 wine_fn_config_makefile dlls/itss enable_itss
 wine_fn_config_makefile dlls/itss/tests enable_tests
+wine_fn_config_makefile dlls/tuica.cpl enable_tuica_cpl
 wine_fn_config_makefile dlls/joy.cpl enable_joy_cpl
 wine_fn_config_makefile dlls/jscript enable_jscript
 wine_fn_config_makefile dlls/jscript/tests enable_tests

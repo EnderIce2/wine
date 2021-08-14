@@ -195,7 +195,7 @@ NTSTATUS WINAPI NtQueryInformationToken(HANDLE token, TOKEN_INFORMATION_CLASS cl
 
     ULONG len = 0;
     NTSTATUS status = STATUS_SUCCESS;
-
+    /* this is a small implementation for custom privileges in wine */
     const char *priv = getenv("WINEPRIV");
     if (!priv)
     {
