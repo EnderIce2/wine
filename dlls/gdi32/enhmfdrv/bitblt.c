@@ -244,12 +244,20 @@ INT CDECL EMFDRV_StretchDIBits( PHYSDEV dev, INT xDst, INT yDst, INT widthDst, I
                                 INT xSrc, INT ySrc, INT widthSrc, INT heightSrc, const void *bits,
                                 BITMAPINFO *info, UINT wUsage, DWORD dwRop )
 {
+    /* FIXME: Update bound rect */
+    return heightSrc;
+}
+
+BOOL EMFDC_StretchDIBits( DC_ATTR *dc_attr, INT x_dst, INT y_dst, INT width_dst, INT height_dst,
+                          INT x_src, INT y_src, INT width_src, INT height_src, const void *bits,
+                          const BITMAPINFO *info, UINT usage, DWORD rop )
+{
     EMRSTRETCHDIBITS *emr;
     BOOL ret;
     UINT bmi_size, emr_size;
 
     /* calculate the size of the colour table */
-    bmi_size = get_dib_info_size(info, wUsage);
+    bmi_size = get_dib_info_size( info, usage );
 
     emr_size = sizeof (EMRSTRETCHDIBITS) + bmi_size + info->bmiHeader.biSizeImage;
     emr = HeapAlloc(GetProcessHeap(), 0, emr_size );
@@ -265,74 +273,83 @@ INT CDECL EMFDRV_StretchDIBits( PHYSDEV dev, INT xDst, INT yDst, INT widthDst, I
     emr->emr.iType = EMR_STRETCHDIBITS;
     emr->emr.nSize = emr_size;
 
-    emr->xDest     = xDst;
-    emr->yDest     = yDst;
-    emr->cxDest    = widthDst;
-    emr->cyDest    = heightDst;
-    emr->dwRop     = dwRop;
-    emr->xSrc      = xSrc; /* FIXME: only save the piece of the bitmap needed */
-    emr->ySrc      = ySrc;
+    emr->xDest     = x_dst;
+    emr->yDest     = y_dst;
+    emr->cxDest    = width_dst;
+    emr->cyDest    = height_dst;
+    emr->dwRop     = rop;
+    emr->xSrc      = x_src; /* FIXME: only save the piece of the bitmap needed */
+    emr->ySrc      = y_src;
 
-    emr->iUsageSrc    = wUsage;
+    emr->iUsageSrc    = usage;
     emr->offBmiSrc    = sizeof (EMRSTRETCHDIBITS);
     emr->cbBmiSrc     = bmi_size;
     emr->offBitsSrc   = emr->offBmiSrc + bmi_size; 
     emr->cbBitsSrc    = info->bmiHeader.biSizeImage;
 
-    emr->cxSrc = widthSrc;
-    emr->cySrc = heightSrc;
+    emr->cxSrc = width_src;
+    emr->cySrc = height_src;
 
-    emr->rclBounds.left   = xDst;
-    emr->rclBounds.top    = yDst;
-    emr->rclBounds.right  = xDst + widthDst;
-    emr->rclBounds.bottom = yDst + heightDst;
+    emr->rclBounds.left   = x_dst;
+    emr->rclBounds.top    = y_dst;
+    emr->rclBounds.right  = x_dst + width_dst;
+    emr->rclBounds.bottom = y_dst + height_dst;
 
     /* save the record we just created */
-    ret = EMFDRV_WriteRecord( dev, &emr->emr );
+    ret = EMFDRV_WriteRecord( dc_attr->emf, &emr->emr );
     if(ret)
-        EMFDRV_UpdateBBox( dev, &emr->rclBounds );
+        EMFDRV_UpdateBBox( dc_attr->emf, &emr->rclBounds );
 
     HeapFree(GetProcessHeap(), 0, emr);
 
-    return ret ? heightSrc : GDI_ERROR;
+    return ret;
 }
 
 INT CDECL EMFDRV_SetDIBitsToDevice( PHYSDEV dev, INT xDst, INT yDst, DWORD width, DWORD height,
                                     INT xSrc, INT ySrc, UINT startscan, UINT lines,
                                     LPCVOID bits, BITMAPINFO *info, UINT wUsage )
 {
+    /* FIXME: Update bound rect */
+    return lines;
+}
+
+BOOL EMFDC_SetDIBitsToDevice( DC_ATTR *dc_attr, INT x_dst, INT y_dst, DWORD width, DWORD height,
+                              INT x_src, INT y_src, UINT startscan, UINT lines,
+                              const void *bits, const BITMAPINFO *info, UINT usage )
+{
     EMRSETDIBITSTODEVICE* pEMR;
-    DWORD bmiSize = get_dib_info_size(info, wUsage);
+    DWORD bmiSize = get_dib_info_size( info, usage );
     DWORD size = sizeof(EMRSETDIBITSTODEVICE) + bmiSize + info->bmiHeader.biSizeImage;
+    BOOL ret;
 
     pEMR = HeapAlloc(GetProcessHeap(), 0, size);
-    if (!pEMR) return 0;
+    if (!pEMR) return FALSE;
 
     pEMR->emr.iType = EMR_SETDIBITSTODEVICE;
     pEMR->emr.nSize = size;
-    pEMR->rclBounds.left = xDst;
-    pEMR->rclBounds.top = yDst;
-    pEMR->rclBounds.right = xDst + width - 1;
-    pEMR->rclBounds.bottom = yDst + height - 1;
-    pEMR->xDest = xDst;
-    pEMR->yDest = yDst;
-    pEMR->xSrc = xSrc;
-    pEMR->ySrc = ySrc;
+    pEMR->rclBounds.left = x_dst;
+    pEMR->rclBounds.top = y_dst;
+    pEMR->rclBounds.right = x_dst + width - 1;
+    pEMR->rclBounds.bottom = y_dst + height - 1;
+    pEMR->xDest = x_dst;
+    pEMR->yDest = y_dst;
+    pEMR->xSrc = x_src;
+    pEMR->ySrc = y_src;
     pEMR->cxSrc = width;
     pEMR->cySrc = height;
     pEMR->offBmiSrc = sizeof(EMRSETDIBITSTODEVICE);
     pEMR->cbBmiSrc = bmiSize;
     pEMR->offBitsSrc = sizeof(EMRSETDIBITSTODEVICE) + bmiSize;
     pEMR->cbBitsSrc = info->bmiHeader.biSizeImage;
-    pEMR->iUsageSrc = wUsage;
+    pEMR->iUsageSrc = usage;
     pEMR->iStartScan = startscan;
     pEMR->cScans = lines;
     memcpy((BYTE*)pEMR + pEMR->offBmiSrc, info, bmiSize);
     memcpy((BYTE*)pEMR + pEMR->offBitsSrc, bits, info->bmiHeader.biSizeImage);
 
-    if (EMFDRV_WriteRecord(dev, (EMR*)pEMR))
-        EMFDRV_UpdateBBox(dev, &(pEMR->rclBounds));
+    if ((ret = EMFDRV_WriteRecord( dc_attr->emf, (EMR*)pEMR )))
+        EMFDRV_UpdateBBox( dc_attr->emf, &pEMR->rclBounds );
 
     HeapFree( GetProcessHeap(), 0, pEMR);
-    return lines;
+    return ret;
 }

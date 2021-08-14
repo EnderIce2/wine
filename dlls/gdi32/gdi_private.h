@@ -55,6 +55,8 @@ extern BOOL METADC_Chord( HDC hdc, INT left, INT top, INT right, INT bottom, INT
 extern BOOL METADC_Ellipse( HDC hdc, INT left, INT top, INT right, INT bottom ) DECLSPEC_HIDDEN;
 extern BOOL METADC_ExcludeClipRect( HDC hdc, INT left, INT top, INT right,
                                     INT bottom ) DECLSPEC_HIDDEN;
+extern BOOL METADC_ExtEscape( HDC hdc, INT escape, INT input_size, const void *input,
+                              INT output_size, void *output ) DECLSPEC_HIDDEN;
 extern BOOL METADC_ExtFloodFill( HDC hdc, INT x, INT y, COLORREF color,
                                  UINT fill_type ) DECLSPEC_HIDDEN;
 extern BOOL METADC_ExtSelectClipRgn( HDC hdc, HRGN hrgn, INT mode ) DECLSPEC_HIDDEN;
@@ -91,6 +93,10 @@ extern BOOL METADC_ScaleWindowExtEx( HDC hdc, INT x_num, INT x_denom, INT y_num,
 extern HGDIOBJ METADC_SelectObject( HDC hdc, HGDIOBJ obj ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SelectPalette( HDC hdc, HPALETTE palette ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetBkMode( HDC hdc, INT mode ) DECLSPEC_HIDDEN;
+extern INT  METADC_SetDIBitsToDevice( HDC hdc, INT x_dest, INT y_dest, DWORD width, DWORD height,
+                                      INT x_src, INT y_src, UINT startscan, UINT lines,
+                                      const void *bits, const BITMAPINFO *info,
+                                      UINT coloruse ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetLayout( HDC hdc, DWORD layout ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetTextCharacterExtra( HDC hdc, INT extra ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetMapMode( HDC hdc, INT mode ) DECLSPEC_HIDDEN;
@@ -109,7 +115,10 @@ extern BOOL METADC_SetWindowOrgEx( HDC, INT x, INT y ) DECLSPEC_HIDDEN;
 extern BOOL METADC_StretchBlt( HDC hdc_dst, INT x_dst, INT y_dst, INT width_dst, INT height_dst,
                                HDC hdc_src, INT x_src, INT y_src, INT width_src, INT height_src,
                                DWORD rop );
-
+extern INT  METADC_StretchDIBits( HDC hdc, INT x_dst, INT y_dst, INT width_dst, INT height_dst,
+                                  INT x_src, INT y_src, INT width_src, INT height_src,
+                                  const void *bits, const BITMAPINFO *info, UINT coloruse,
+                                  DWORD rop ) DECLSPEC_HIDDEN;
 /* enhanced metafiles */
 extern BOOL EMFDC_AbortPath( DC_ATTR *dc_attr ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_AlphaBlend( DC_ATTR *dc_attr, INT x_dst, INT y_dst, INT width_dst, INT height_dst,
@@ -143,6 +152,8 @@ extern BOOL EMFDC_IntersectClipRect( DC_ATTR *dc_attr, INT left, INT top, INT ri
                                      INT bottom ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_InvertRgn( DC_ATTR *dc_attr, HRGN hrgn ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_LineTo( DC_ATTR *dc_attr, INT x, INT y ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_ModifyWorldTransform( DC_ATTR *dc_attr, const XFORM *xform,
+                                        DWORD mode ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_MoveTo( DC_ATTR *dc_attr, INT x, INT y ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_OffsetClipRgn( DC_ATTR *dc_attr, INT x, INT y ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_PaintRgn( DC_ATTR *dc_attr, HRGN hrgn ) DECLSPEC_HIDDEN;
@@ -171,6 +182,10 @@ extern BOOL EMFDC_SelectObject( DC_ATTR *dc_attr, HGDIOBJ obj ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SelectPalette( DC_ATTR *dc_attr, HPALETTE palette ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetArcDirection( DC_ATTR *dc_attr, INT dir ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetBkMode( DC_ATTR *dc_attr, INT mode ) DECLSPEC_HIDDEN;
+extern INT  EMFDC_SetDIBitsToDevice( DC_ATTR *dc_attr, INT x_dest, INT y_dest, DWORD width,
+                                     DWORD height, INT x_src, INT y_src, UINT startscan,
+                                     UINT lines, const void *bits, const BITMAPINFO *info,
+                                     UINT coloruse ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetLayout( DC_ATTR *dc_attr, DWORD layout ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetMapMode( DC_ATTR *dc_attr, INT mode ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetMapperFlags( DC_ATTR *dc_attr, DWORD flags ) DECLSPEC_HIDDEN;
@@ -184,8 +199,13 @@ extern BOOL EMFDC_SetViewportExtEx( DC_ATTR *dc_attr, INT x, INT y ) DECLSPEC_HI
 extern BOOL EMFDC_SetViewportOrgEx( DC_ATTR *dc_attr, INT x, INT y ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetWindowExtEx( DC_ATTR *dc_attr, INT x, INT y ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetWindowOrgEx( DC_ATTR *dc_attr, INT x, INT y ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_SetWorldTransform( DC_ATTR *dc_attr, const XFORM *xform ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_StretchBlt( DC_ATTR *dc_attr, INT x_dst, INT y_dst, INT width_dst, INT height_dst,
                               HDC hdc_src, INT x_src, INT y_src, INT width_src, INT height_src,
                               DWORD rop );
+extern BOOL EMFDC_StretchDIBits( DC_ATTR *dc_attr, INT x_dst, INT y_dst, INT width_dst,
+                                 INT height_dst, INT x_src, INT y_src, INT width_src,
+                                 INT height_src, const void *bits, const BITMAPINFO *info,
+                                 UINT coloruse, DWORD rop ) DECLSPEC_HIDDEN;
 
 #endif /* __WINE_GDI_PRIVATE_H */

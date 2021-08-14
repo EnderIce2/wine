@@ -300,30 +300,19 @@ BOOL EMFDC_SetLayout( DC_ATTR *dc_attr, DWORD layout )
     return EMFDRV_WriteRecord( dc_attr->emf, &emr.emr );
 }
 
-BOOL CDECL EMFDRV_SetWorldTransform( PHYSDEV dev, const XFORM *xform)
+BOOL EMFDC_SetWorldTransform( DC_ATTR *dc_attr, const XFORM *xform )
 {
-    PHYSDEV next = GET_NEXT_PHYSDEV( dev, pSetWorldTransform );
-    EMFDRV_PDEVICE *physDev = get_emf_physdev( dev );
     EMRSETWORLDTRANSFORM emr;
-    BOOL ret;
 
     emr.emr.iType = EMR_SETWORLDTRANSFORM;
     emr.emr.nSize = sizeof(emr);
     emr.xform = *xform;
-
-    if (!EMFDRV_WriteRecord( dev, &emr.emr )) return FALSE;
-    physDev->modifying_transform++;
-    ret = next->funcs->pSetWorldTransform( next, xform );
-    physDev->modifying_transform--;
-    return ret;
+    return EMFDRV_WriteRecord( dc_attr->emf, &emr.emr );
 }
 
-BOOL CDECL EMFDRV_ModifyWorldTransform( PHYSDEV dev, const XFORM *xform, DWORD mode)
+BOOL EMFDC_ModifyWorldTransform( DC_ATTR *dc_attr, const XFORM *xform, DWORD mode )
 {
-    PHYSDEV next = GET_NEXT_PHYSDEV( dev, pModifyWorldTransform );
-    EMFDRV_PDEVICE *physDev = get_emf_physdev( dev );
     EMRMODIFYWORLDTRANSFORM emr;
-    BOOL ret;
 
     emr.emr.iType = EMR_MODIFYWORLDTRANSFORM;
     emr.emr.nSize = sizeof(emr);
@@ -341,12 +330,7 @@ BOOL CDECL EMFDRV_ModifyWorldTransform( PHYSDEV dev, const XFORM *xform, DWORD m
         emr.xform = *xform;
     }
     emr.iMode = mode;
-
-    if (!EMFDRV_WriteRecord( dev, &emr.emr )) return FALSE;
-    physDev->modifying_transform++;
-    ret = next->funcs->pModifyWorldTransform( next, xform, mode );
-    physDev->modifying_transform--;
-    return ret;
+    return EMFDRV_WriteRecord( dc_attr->emf, &emr.emr );
 }
 
 BOOL EMFDC_SetMapperFlags( DC_ATTR *dc_attr, DWORD flags )

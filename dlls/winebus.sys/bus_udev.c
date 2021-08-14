@@ -62,6 +62,7 @@
 #include "winternl.h"
 #include "ddk/wdm.h"
 #include "ddk/hidtypes.h"
+#include "ddk/hidsdi.h"
 #include "wine/debug.h"
 #include "wine/heap.h"
 #include "wine/unicode.h"
@@ -166,11 +167,6 @@ static const BYTE REL_TO_HID_MAP[][2] = {
 #define HID_REL_MAX (REL_MISC+1)
 #define TOP_REL_PAGE (HID_USAGE_PAGE_CONSUMER+1)
 
-struct wine_input_absinfo {
-    struct input_absinfo info;
-    BYTE report_index;
-};
-
 struct wine_input_private {
     struct platform_private base;
 
@@ -186,7 +182,7 @@ struct wine_input_private {
     BYTE rel_map[HID_REL_MAX];
     BYTE hat_map[8];
     int hat_values[8];
-    struct wine_input_absinfo abs_map[HID_ABS_MAX];
+    int abs_map[HID_ABS_MAX];
 };
 
 #define test_bit(arr,bit) (((BYTE*)(arr))[(bit)>>3]&(1<<((bit)&7)))
@@ -287,7 +283,7 @@ static void set_abs_axis_value(struct wine_input_private *ext, int code, int val
     }
     else if (code < HID_ABS_MAX && ABS_TO_HID_MAP[code][0] != 0)
     {
-        index = ext->abs_map[code].report_index;
+        index = ext->abs_map[code];
         *((DWORD*)&ext->current_report_buffer[index]) = LE_DWORD(value);
     }
 }
@@ -349,10 +345,10 @@ static INT count_abs_axis(int device_fd)
 
 static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_device *dev)
 {
-    int abs_pages[TOP_ABS_PAGE][HID_ABS_MAX+1];
-    int rel_pages[TOP_REL_PAGE][HID_REL_MAX+1];
+    struct input_absinfo abs_info[HID_ABS_MAX];
     BYTE absbits[(ABS_MAX+7)/8];
     BYTE relbits[(REL_MAX+7)/8];
+    USAGE_AND_PAGE usage;
     INT i;
     INT report_size;
     INT button_count, abs_count, rel_count, hat_count;
@@ -371,106 +367,46 @@ static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_
 
     report_size = 0;
 
-    abs_count = 0;
-    memset(abs_pages, 0, sizeof(abs_pages));
-    for (i = 0; i < HID_ABS_MAX; i++)
-        if (test_bit(absbits, i))
-        {
-            abs_pages[ABS_TO_HID_MAP[i][0]][0]++;
-            abs_pages[ABS_TO_HID_MAP[i][0]][abs_pages[ABS_TO_HID_MAP[i][0]][0]] = i;
+    if (!hid_descriptor_begin(&ext->desc, device_usage[0], device_usage[1]))
+        return FALSE;
 
-            ioctl(ext->base.device_fd, EVIOCGABS(i), &(ext->abs_map[i]));
-        }
-    /* Skip page 0, aka HID_USAGE_PAGE_UNDEFINED */
-    for (i = 1; i < TOP_ABS_PAGE; i++)
-        if (abs_pages[i][0] > 0)
-        {
-            int j;
-            for (j = 1; j <= abs_pages[i][0]; j++)
-            {
-                ext->abs_map[abs_pages[i][j]].report_index = report_size;
-                report_size+=4;
-            }
-            abs_count++;
-        }
+    abs_count = 0;
+    for (i = 0; i < HID_ABS_MAX; i++)
+    {
+        if (!test_bit(absbits, i)) continue;
+        ioctl(ext->base.device_fd, EVIOCGABS(i), abs_info + i);
+
+        if (!(usage.UsagePage = ABS_TO_HID_MAP[i][0])) continue;
+        if (!(usage.Usage = ABS_TO_HID_MAP[i][1])) continue;
+
+        if (!hid_descriptor_add_axes(&ext->desc, 1, usage.UsagePage, &usage.Usage, FALSE, 32,
+                                     LE_DWORD(abs_info[i].minimum), LE_DWORD(abs_info[i].maximum)))
+            return FALSE;
+
+        ext->abs_map[i] = report_size;
+        report_size += 4;
+        abs_count++;
+    }
 
     rel_count = 0;
-    memset(rel_pages, 0, sizeof(rel_pages));
     for (i = 0; i < HID_REL_MAX; i++)
-        if (test_bit(relbits, i))
-        {
-            rel_pages[REL_TO_HID_MAP[i][0]][0]++;
-            rel_pages[REL_TO_HID_MAP[i][0]][rel_pages[REL_TO_HID_MAP[i][0]][0]] = i;
-        }
-    /* Skip page 0, aka HID_USAGE_PAGE_UNDEFINED */
-    for (i = 1; i < TOP_REL_PAGE; i++)
-        if (rel_pages[i][0] > 0)
-        {
-            int j;
-            for (j = 1; j <= rel_pages[i][0]; j++)
-            {
-                ext->rel_map[rel_pages[i][j]] = report_size;
-                report_size++;
-            }
-            rel_count++;
-        }
+    {
+        if (!test_bit(relbits, i)) continue;
+        if (!(usage.UsagePage = REL_TO_HID_MAP[i][0])) continue;
+        if (!(usage.Usage = REL_TO_HID_MAP[i][1])) continue;
+
+        if (!hid_descriptor_add_axes(&ext->desc, 1, usage.UsagePage, &usage.Usage, TRUE, 8,
+                                     0x81, 0x7f))
+            return FALSE;
+
+        ext->rel_map[i] = report_size;
+        report_size++;
+        rel_count++;
+    }
 
     /* For now lump all buttons just into incremental usages, Ignore Keys */
     ext->button_start = report_size;
     button_count = count_buttons(ext->base.device_fd, ext->button_map);
-    if (button_count)
-    {
-        report_size += (button_count + 7) / 8;
-    }
-
-    hat_count = 0;
-    for (i = ABS_HAT0X; i <=ABS_HAT3X; i+=2)
-        if (test_bit(absbits, i))
-        {
-            ext->hat_map[i - ABS_HAT0X] = report_size;
-            ext->hat_values[i - ABS_HAT0X] = 0;
-            ext->hat_values[i - ABS_HAT0X + 1] = 0;
-            report_size++;
-            hat_count++;
-        }
-
-    TRACE("Report will be %i bytes\n", report_size);
-
-    if (!hid_descriptor_begin(&ext->desc, device_usage[0], device_usage[1]))
-        return FALSE;
-
-    if (abs_count)
-    {
-        for (i = 1; i < TOP_ABS_PAGE; i++)
-        {
-            if (abs_pages[i][0])
-            {
-                USAGE usages[HID_ABS_MAX];
-                int j;
-                for (j = 0; j < abs_pages[i][0]; j++)
-                    usages[j] = ABS_TO_HID_MAP[abs_pages[i][j+1]][1];
-                if (!hid_descriptor_add_axes(&ext->desc, abs_pages[i][0], i, usages, FALSE, 32,
-                                             LE_DWORD(ext->abs_map[abs_pages[i][1]].info.minimum),
-                                             LE_DWORD(ext->abs_map[abs_pages[i][1]].info.maximum)))
-                    return FALSE;
-            }
-        }
-    }
-    if (rel_count)
-    {
-        for (i = 1; i < TOP_REL_PAGE; i++)
-        {
-            if (rel_pages[i][0])
-            {
-                USAGE usages[HID_REL_MAX];
-                int j;
-                for (j = 0; j < rel_pages[i][0]; j++)
-                    usages[j] = REL_TO_HID_MAP[rel_pages[i][j+1]][1];
-                if (!hid_descriptor_add_axes(&ext->desc, rel_pages[i][0], i, usages, TRUE, 8, 0x81, 0x7f))
-                    return FALSE;
-            }
-        }
-    }
     if (button_count)
     {
         if (!hid_descriptor_add_buttons(&ext->desc, HID_USAGE_PAGE_BUTTON, 1, button_count))
@@ -482,7 +418,21 @@ static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_
             if (!hid_descriptor_add_padding(&ext->desc, padding))
                 return FALSE;
         }
+
+        report_size += (button_count + 7) / 8;
     }
+
+    hat_count = 0;
+    for (i = ABS_HAT0X; i <=ABS_HAT3X; i+=2)
+    {
+        if (!test_bit(absbits, i)) continue;
+        ext->hat_map[i - ABS_HAT0X] = report_size;
+        ext->hat_values[i - ABS_HAT0X] = 0;
+        ext->hat_values[i - ABS_HAT0X + 1] = 0;
+        report_size++;
+        hat_count++;
+    }
+
     if (hat_count)
     {
         if (!hid_descriptor_add_hatswitch(&ext->desc, hat_count))
@@ -491,6 +441,8 @@ static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_
 
     if (!hid_descriptor_end(&ext->desc))
         return FALSE;
+
+    TRACE("Report will be %i bytes\n", report_size);
 
     ext->buffer_length = report_size;
     if (!(ext->current_report_buffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, report_size)))
@@ -502,7 +454,7 @@ static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_
     /* Initialize axis in the report */
     for (i = 0; i < HID_ABS_MAX; i++)
         if (test_bit(absbits, i))
-            set_abs_axis_value(ext, i, ext->abs_map[i].info.value);
+            set_abs_axis_value(ext, i, abs_info[i].value);
 
     return TRUE;
 
@@ -768,32 +720,27 @@ static NTSTATUS begin_report_processing(DEVICE_OBJECT *device)
 static NTSTATUS hidraw_set_output_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *written)
 {
     struct platform_private* ext = impl_from_DEVICE_OBJECT(device);
-    int rc;
+    BYTE buffer[8192];
+    int count = 0;
 
-    if (id != 0)
-        rc = write(ext->device_fd, report, length);
+    if ((buffer[0] = id))
+        count = write(ext->device_fd, report, length);
+    else if (length > sizeof(buffer) - 1)
+        ERR_(hid_report)("id %d length %u >= 8192, cannot write\n", id, length);
     else
     {
-        BYTE report_buffer[1024];
-
-        if (length + 1 > sizeof(report_buffer))
-        {
-            ERR("Output report buffer too small\n");
-            return STATUS_UNSUCCESSFUL;
-        }
-
-        report_buffer[0] = 0;
-        memcpy(&report_buffer[1], report, length);
-        rc = write(ext->device_fd, report_buffer, length + 1);
+        memcpy(buffer + 1, report, length);
+        count = write(ext->device_fd, buffer, length + 1);
     }
-    if (rc > 0)
+
+    if (count > 0)
     {
-        *written = rc;
+        *written = count;
         return STATUS_SUCCESS;
     }
     else
     {
-        TRACE("write failed: %d %d %s\n", rc, errno, strerror(errno));
+        ERR_(hid_report)("id %d write failed error: %d %s\n", id, errno, strerror(errno));
         *written = 0;
         return STATUS_UNSUCCESSFUL;
     }
@@ -802,19 +749,28 @@ static NTSTATUS hidraw_set_output_report(DEVICE_OBJECT *device, UCHAR id, BYTE *
 static NTSTATUS hidraw_get_feature_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *read)
 {
 #if defined(HAVE_LINUX_HIDRAW_H) && defined(HIDIOCGFEATURE)
-    int rc;
     struct platform_private* ext = impl_from_DEVICE_OBJECT(device);
-    report[0] = id;
-    length = min(length, 0x1fff);
-    rc = ioctl(ext->device_fd, HIDIOCGFEATURE(length), report);
-    if (rc >= 0)
+    BYTE buffer[8192];
+    int count = 0;
+
+    if ((buffer[0] = id) && length <= 0x1fff)
+        count = ioctl(ext->device_fd, HIDIOCGFEATURE(length), report);
+    else if (length > sizeof(buffer) - 1)
+        ERR_(hid_report)("id %d length %u >= 8192, cannot read\n", id, length);
+    else
     {
-        *read = rc;
+        count = ioctl(ext->device_fd, HIDIOCGFEATURE(length + 1), buffer);
+        memcpy(report, buffer + 1, length);
+    }
+
+    if (count > 0)
+    {
+        *read = count;
         return STATUS_SUCCESS;
     }
     else
     {
-        TRACE_(hid_report)("ioctl(HIDIOCGFEATURE(%d)) failed: %d %s\n", length, errno, strerror(errno));
+        ERR_(hid_report)("id %d read failed, error: %d %s\n", id, errno, strerror(errno));
         *read = 0;
         return STATUS_UNSUCCESSFUL;
     }
@@ -827,35 +783,28 @@ static NTSTATUS hidraw_get_feature_report(DEVICE_OBJECT *device, UCHAR id, BYTE 
 static NTSTATUS hidraw_set_feature_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *written)
 {
 #if defined(HAVE_LINUX_HIDRAW_H) && defined(HIDIOCSFEATURE)
-    int rc;
     struct platform_private* ext = impl_from_DEVICE_OBJECT(device);
-    BYTE *feature_buffer;
     BYTE buffer[8192];
+    int count = 0;
 
-    if (id == 0)
-    {
-        if (length + 1 > sizeof(buffer))
-        {
-            ERR("Output feature buffer too small\n");
-            return STATUS_UNSUCCESSFUL;
-        }
-        buffer[0] = 0;
-        memcpy(&buffer[1], report, length);
-        feature_buffer = buffer;
-        length = length + 1;
-    }
+    if ((buffer[0] = id) && length <= 0x1fff)
+        count = ioctl(ext->device_fd, HIDIOCSFEATURE(length), report);
+    else if (length > sizeof(buffer) - 1)
+        ERR_(hid_report)("id %d length %u >= 8192, cannot write\n", id, length);
     else
-        feature_buffer = report;
-    length = min(length, 0x1fff);
-    rc = ioctl(ext->device_fd, HIDIOCSFEATURE(length), feature_buffer);
-    if (rc >= 0)
     {
-        *written = rc;
+        memcpy(buffer + 1, report, length);
+        count = ioctl(ext->device_fd, HIDIOCSFEATURE(length + 1), buffer);
+    }
+
+    if (count > 0)
+    {
+        *written = count;
         return STATUS_SUCCESS;
     }
     else
     {
-        TRACE_(hid_report)("ioctl(HIDIOCSFEATURE(%d)) failed: %d %s\n", length, errno, strerror(errno));
+        ERR_(hid_report)("id %d write failed, error: %d %s\n", id, errno, strerror(errno));
         *written = 0;
         return STATUS_UNSUCCESSFUL;
     }
@@ -1027,9 +976,23 @@ static const platform_vtbl lnxev_vtbl = {
 };
 #endif
 
-static int check_same_device(DEVICE_OBJECT *device, void* context)
+static const char *get_device_syspath(struct udev_device *dev)
 {
-    return !compare_platform_device(device, context);
+    struct udev_device *parent;
+
+    if ((parent = udev_device_get_parent_with_subsystem_devtype(dev, "hid", NULL)))
+        return udev_device_get_syspath(parent);
+
+    if ((parent = udev_device_get_parent_with_subsystem_devtype(dev, "usb", "usb_device")))
+        return udev_device_get_syspath(parent);
+
+    return "";
+}
+
+static int check_device_syspath(DEVICE_OBJECT *device, void* context)
+{
+    struct platform_private *private = impl_from_DEVICE_OBJECT(device);
+    return strcmp(get_device_syspath(private->udev_device), context);
 }
 
 static int parse_uevent_info(const char *uevent, DWORD *vendor_id,
@@ -1129,28 +1092,24 @@ static void try_add_device(struct udev_device *dev)
         return;
     }
 
+    TRACE("udev %s syspath %s\n", debugstr_a(devnode), udev_device_get_syspath(dev));
+
+#ifdef HAS_PROPER_INPUT_HEADER
+    device = bus_enumerate_hid_devices(&lnxev_vtbl, check_device_syspath, (void *)get_device_syspath(dev));
+    if (!device) device = bus_enumerate_hid_devices(&hidraw_vtbl, check_device_syspath, (void *)get_device_syspath(dev));
+    if (device)
+    {
+        TRACE("duplicate device found, not adding the new one\n");
+        close(fd);
+        return;
+    }
+#endif
+
     subsystem = udev_device_get_subsystem(dev);
     hiddev = udev_device_get_parent_with_subsystem_devtype(dev, "hid", NULL);
     if (hiddev)
     {
         const char *bcdDevice = NULL;
-#ifdef HAS_PROPER_INPUT_HEADER
-        const platform_vtbl *other_vtbl = NULL;
-        DEVICE_OBJECT *dup = NULL;
-        if (strcmp(subsystem, "hidraw") == 0)
-            other_vtbl = &lnxev_vtbl;
-        else if (strcmp(subsystem, "input") == 0)
-            other_vtbl = &hidraw_vtbl;
-
-        if (other_vtbl)
-            dup = bus_enumerate_hid_devices(other_vtbl, check_same_device, dev);
-        if (dup)
-        {
-            TRACE("Duplicate cross bus device (%p) found, not adding the new one\n", dup);
-            close(fd);
-            return;
-        }
-#endif
         parse_uevent_info(udev_device_get_sysattr_value(hiddev, "uevent"),
                           &vid, &pid, &input, &serial);
         if (serial == NULL)

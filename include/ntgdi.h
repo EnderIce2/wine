@@ -105,6 +105,8 @@ enum
     NtGdiSetMapMode = 8,
 };
 
+#define MWT_SET  4
+
 /* structs not compatible with native Windows */
 #ifdef __WINESRC__
 
@@ -188,8 +190,8 @@ HRGN     WINAPI NtGdiExtCreateRegion( const XFORM *xform, DWORD count, const RGN
 INT      WINAPI NtGdiExtGetObjectW( HGDIOBJ handle, INT count, void *buffer );
 INT      WINAPI NtGdiExtSelectClipRgn( HDC hdc, HRGN region, INT mode );
 BOOL     WINAPI NtGdiFillRgn( HDC hdc, HRGN hrgn, HBRUSH hbrush );
-INT      WINAPI NtGdiExtEscape( HDC hdc, INT escape, INT input_size, const char *input,
-                                INT output_size, char *output );
+INT      WINAPI NtGdiExtEscape( HDC hdc, WCHAR *driver, INT driver_id, INT escape, INT input_size,
+                                const char *input, INT output_size, char *output );
 BOOL     WINAPI NtGdiExtFloodFill( HDC hdc, INT x, INT y, COLORREF color, UINT type );
 BOOL     WINAPI NtGdiFrameRgn( HDC hdc, HRGN hrgn, HBRUSH brush,
                                INT width, INT height );
@@ -229,6 +231,7 @@ BOOL     WINAPI NtGdiFontIsLinked( HDC hdc );
 INT      WINAPI NtGdiIntersectClipRect( HDC hdc, INT left, INT top, INT right, INT bottom );
 BOOL     WINAPI NtGdiInvertRgn( HDC hdc, HRGN hrgn );
 BOOL     WINAPI NtGdiLineTo( HDC hdc, INT x, INT y );
+BOOL     WINAPI NtGdiModifyWorldTransform( HDC hdc, const XFORM *xform, DWORD mode );
 BOOL     WINAPI NtGdiMoveTo( HDC hdc, INT x, INT y, POINT *pt );
 INT      WINAPI NtGdiOffsetClipRgn( HDC hdc, INT x, INT y );
 INT      WINAPI NtGdiOffsetRgn( HRGN hrgn, INT x, INT y );
@@ -260,6 +263,11 @@ LONG     WINAPI NtGdiSetBitmapBits( HBITMAP hbitmap, LONG count, const void *bit
 BOOL     WINAPI NtGdiSetBitmapDimension( HBITMAP hbitmap, INT x, INT y, SIZE *prev_size );
 BOOL     WINAPI NtGdiSetBrushOrg( HDC hdc, INT x, INT y, POINT *prev_org );
 UINT     WINAPI NtGdiSetBoundsRect( HDC hdc, const RECT *rect, UINT flags );
+INT      WINAPI NtGdiSetDIBitsToDeviceInternal( HDC hdc, INT x_dst, INT y_dst, DWORD cx,
+                                                DWORD cy, INT x_src, INT y_src, UINT startscan,
+                                                UINT lines, const void *bits, const BITMAPINFO *bmi,
+                                                UINT coloruse, UINT max_bits, UINT max_info,
+                                                BOOL xform_coords, HANDLE xform );
 BOOL     WINAPI NtGdiSetDeviceGammaRamp( HDC hdc, void *ptr );
 DWORD    WINAPI NtGdiSetLayout( HDC hdc, LONG wox, DWORD layout );
 INT      WINAPI NtGdiSetMetaRgn( HDC hdc );
@@ -275,6 +283,11 @@ INT      WINAPI NtGdiStartPage( HDC hdc );
 BOOL     WINAPI NtGdiStretchBlt( HDC hdc, INT x_dst, INT y_dst, INT width_dst, INT height_dst,
                                  HDC hdc_src, INT x_src, INT y_src, INT width_src, INT height_src,
                                  DWORD rop, COLORREF bk_color );
+INT      WINAPI NtGdiStretchDIBitsInternal( HDC hdc, INT x_dst, INT y_dst, INT width_dst,
+                                            INT height_dst, INT x_src, INT y_src, INT width_src,
+                                            INT height_src, const void *bits, const BITMAPINFO *bmi,
+                                            UINT coloruse, DWORD rop, UINT max_info, UINT max_bits,
+                                            HANDLE xform );
 BOOL     WINAPI NtGdiStrokePath( HDC hdc );
 BOOL     WINAPI NtGdiStrokeAndFillPath( HDC hdc );
 BOOL     WINAPI NtGdiTransformPoints( HDC hdc, const POINT *points_in, POINT *points_out,

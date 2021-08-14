@@ -35,25 +35,25 @@ static BOOL CDECL MFDRV_DeleteDC( PHYSDEV dev );
 
 
 /**********************************************************************
- *           MFDRV_ExtEscape
+ *           METADC_ExtEscape
  */
-static INT CDECL MFDRV_ExtEscape( PHYSDEV dev, INT nEscape, INT cbInput, LPCVOID in_data,
-                                  INT cbOutput, LPVOID out_data )
+BOOL METADC_ExtEscape( HDC hdc, INT escape, INT input_size, const void *input,
+                       INT output_size, void *output )
 {
     METARECORD *mr;
     DWORD len;
-    INT ret;
+    BOOL ret;
 
-    if (cbOutput) return 0;  /* escapes that require output cannot work in metafiles */
+    if (output_size) return FALSE;  /* escapes that require output cannot work in metafiles */
 
-    len = sizeof(*mr) + sizeof(WORD) + ((cbInput + 1) & ~1);
+    len = sizeof(*mr) + sizeof(WORD) + ((input_size + 1) & ~1);
     mr = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
     mr->rdSize = len / 2;
     mr->rdFunction = META_ESCAPE;
-    mr->rdParm[0] = nEscape;
-    mr->rdParm[1] = cbInput;
-    memcpy(&(mr->rdParm[2]), in_data, cbInput);
-    ret = MFDRV_WriteRecord( dev, mr, len);
+    mr->rdParm[0] = escape;
+    mr->rdParm[1] = input_size;
+    memcpy( &mr->rdParm[2], input, input_size );
+    ret = metadc_record( hdc, mr, len );
     HeapFree(GetProcessHeap(), 0, mr);
     return ret;
 }
@@ -123,7 +123,7 @@ static const struct gdi_dc_funcs MFDRV_Funcs =
     NULL,                            /* pEnumFonts */
     NULL,                            /* pEnumICMProfiles */
     NULL,                            /* pExtDeviceMode */
-    MFDRV_ExtEscape,                 /* pExtEscape */
+    NULL,                            /* pExtEscape */
     NULL,                            /* pExtFloodFill */
     NULL,                            /* pExtTextOut */
     MFDRV_FillPath,                  /* pFillPath */
@@ -159,7 +159,6 @@ static const struct gdi_dc_funcs MFDRV_Funcs =
     NULL,                            /* pGradientFill */
     NULL,                            /* pInvertRgn */
     NULL,                            /* pLineTo */
-    NULL,                            /* pModifyWorldTransform */
     NULL,                            /* pMoveTo */
     NULL,                            /* pPaintRgn */
     NULL,                            /* pPatBlt */
@@ -186,16 +185,15 @@ static const struct gdi_dc_funcs MFDRV_Funcs =
     MFDRV_SetBoundsRect,             /* pSetBoundsRect */
     MFDRV_SetDCBrushColor,           /* pSetDCBrushColor*/
     MFDRV_SetDCPenColor,             /* pSetDCPenColor*/
-    MFDRV_SetDIBitsToDevice,         /* pSetDIBitsToDevice */
+    NULL,                            /* pSetDIBitsToDevice */
     NULL,                            /* pSetDeviceClipping */
     NULL,                            /* pSetDeviceGammaRamp */
     NULL,                            /* pSetPixel */
     MFDRV_SetTextColor,              /* pSetTextColor */
-    NULL,                            /* pSetWorldTransform */
     NULL,                            /* pStartDoc */
     NULL,                            /* pStartPage */
     NULL,                            /* pStretchBlt */
-    MFDRV_StretchDIBits,             /* pStretchDIBits */
+    NULL,                            /* pStretchDIBits */
     MFDRV_StrokeAndFillPath,         /* pStrokeAndFillPath */
     MFDRV_StrokePath,                /* pStrokePath */
     NULL,                            /* pUnrealizePalette */
