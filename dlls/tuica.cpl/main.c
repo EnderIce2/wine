@@ -22,7 +22,7 @@ BOOL WINAPI DllMain(HINSTANCE hdll, DWORD reason, LPVOID reserved)
 
     switch (reason)
     {
-        case DLL_WINE_PREATTACH:
+        case DLL_PROCESS_DETACH:
             return FALSE;  /* prefer native version */
 
         case DLL_PROCESS_ATTACH:

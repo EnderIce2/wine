@@ -561,6 +561,8 @@
 @ stdcall OpenWindowStationW(wstr long long)
 @ stdcall PackDDElParam(long long long)
 @ stdcall PaintDesktop(long)
+@ stdcall SetTileWallpaper(long)
+@ stdcall GetTileWallpaper()
 # @ stub PaintMenuBar
 @ stdcall PeekMessageA(ptr long long long long)
 @ stdcall PeekMessageW(ptr long long long long)

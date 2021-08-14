@@ -123,6 +123,25 @@ LRESULT WINAPI DesktopWndProc( HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
 }
 
 /***********************************************************************
+ *           SetTileWallpaper   (USER32.@)
+ *
+ */
+BOOL WINAPI SetTileWallpaper(BOOL enable)
+{
+    fTileWallPaper = enable;
+    return fTileWallPaper;
+}
+
+/***********************************************************************
+ *           GetTileWallpaper   (USER32.@)
+ *
+ */
+BOOL WINAPI GetTileWallpaper()
+{
+    return fTileWallPaper;
+}
+
+/***********************************************************************
  *           PaintDesktop   (USER32.@)
  *
  */

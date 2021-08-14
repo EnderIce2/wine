@@ -28,15 +28,15 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
 
 STRINGTABLE
 {
-    IDS_EXPLORER_TITLE  "Wine Explorer"
+    IDS_EXPLORER_TITLE  "Țuică Explorer"
     IDS_PATHBOX_LABEL   "Location:"
-    IDS_START_LABEL     "Start"
+    IDS_START_LABEL     "Țuică"
     IDS_RUN             "&Run..."
 }
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 
-#define WINE_FILEDESCRIPTION_STR "Wine Explorer"
+#define WINE_FILEDESCRIPTION_STR "Țuică Explorer"
 #define WINE_FILENAME_STR "explorer.exe"
 #define WINE_FILEVERSION 6,1,7601,17567
 #define WINE_FILEVERSION_STR "6.1.7601.17567"
