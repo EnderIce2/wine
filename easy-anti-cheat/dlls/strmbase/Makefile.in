@@ -1,0 +1,16 @@
+MODULE    = libstrmbase.a
+
+C_SRCS = \
+	dispatch.c \
+	dllfunc.c \
+	filter.c \
+	mediatype.c \
+	outputqueue.c \
+	pin.c \
+	pospass.c \
+	qualitycontrol.c \
+	renderer.c \
+	seeking.c \
+	transform.c \
+	video.c \
+	window.c
