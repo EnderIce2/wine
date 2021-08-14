@@ -58,7 +58,7 @@ PropSheetCallback (HWND hWnd, UINT uMsg, LPARAM lParam)
     return 0;
 }
 
-#define NUM_PROPERTY_PAGES 7
+#define NUM_PROPERTY_PAGES 8
 
 static INT_PTR
 doPropertySheet (HINSTANCE hInstance, HWND hOwner)
@@ -150,6 +150,16 @@ doPropertySheet (HINSTANCE hInstance, HWND hOwner)
     psp[pg].u2.pszIcon = NULL;
     psp[pg].pfnDlgProc = AboutDlgProc;
     psp[pg].pszTitle =  load_string (IDS_TAB_ABOUT);
+    psp[pg].lParam = 0;
+    pg++;
+
+    psp[pg].dwSize = sizeof (PROPSHEETPAGEW);
+    psp[pg].dwFlags = PSP_USETITLE;
+    psp[pg].hInstance = hInstance;
+    psp[pg].u.pszTemplate = MAKEINTRESOURCEW (IDD_TUICACFG);
+    psp[pg].u2.pszIcon = NULL;
+    psp[pg].pfnDlgProc = TuicaDlgProc;
+    psp[pg].pszTitle =  load_string (IDS_TAB_TUICACFG);
     psp[pg].lParam = 0;
     pg++;
 

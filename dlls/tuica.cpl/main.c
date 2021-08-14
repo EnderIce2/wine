@@ -8,13 +8,16 @@
 #include <winuser.h>
 #include <commctrl.h>
 #include <cpl.h>
+#include <wine/list.h>
 #include "ole2.h"
 
 #include "wine/debug.h"
 #include "tuica.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(tuica_cpl);
+
 DECLSPEC_HIDDEN HMODULE hcpl;
+HKEY config_key = NULL;
 
 BOOL WINAPI DllMain(HINSTANCE hdll, DWORD reason, LPVOID reserved)
 {
@@ -72,6 +75,7 @@ static INT_PTR CALLBACK init_elements(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
     {
         case WM_INITDIALOG:
         {
+            char* buf;
             EnableWindow(GetDlgItem(hwnd, IDC_BUTTONWALLPAPER), TRUE);
             if (GetTileWallpaper() == TRUE)
             {
@@ -82,6 +86,15 @@ static INT_PTR CALLBACK init_elements(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
             {
                 EnableWindow(GetDlgItem(hwnd, IDC_BUTTONENABLETILE), TRUE);
                 EnableWindow(GetDlgItem(hwnd, IDC_BUTTONDISABLETILE), FALSE);
+            }
+            //buf = get_reg_key(config_key, keypath("Tuica Settings"), "RobloxPatch", "N");
+            if (IS_OPTION_TRUE(*buf))
+            {
+                EnableWindow(GetDlgItem(hwnd, IDC_USE_ROBLOX_MOUSE_PATCH), TRUE);
+            }
+            else
+            {
+                EnableWindow(GetDlgItem(hwnd, IDC_USE_ROBLOX_MOUSE_PATCH), FALSE);
             }
             return TRUE;
         }
@@ -123,6 +136,19 @@ static INT_PTR CALLBACK init_elements(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
                     EnableWindow(GetDlgItem(hwnd, IDC_BUTTONENABLETILE), TRUE);
                     EnableWindow(GetDlgItem(hwnd, IDC_BUTTONDISABLETILE), FALSE);
                     break;
+                }
+                case IDC_USE_ROBLOX_MOUSE_PATCH:
+                {
+                    if (IsDlgButtonChecked(hwnd, IDC_USE_ROBLOX_MOUSE_PATCH))
+                    {
+                        WINE_MESSAGE("button yes");
+                        //set_reg_key(config_key, keypath("Tuica Settings"), "RobloxPatch", "Y");
+                    }
+                    else
+                    {
+                        WINE_MESSAGE("button no");
+                        //set_reg_key(config_key, keypath("Tuica Settings"), "RobloxPatch", "N");
+                    }
                 }
 
                 break;
@@ -174,6 +200,11 @@ static void display_cpl_sheets(HWND parent)
     psp[id].dwSize = sizeof (PROPSHEETPAGEW);
     psp[id].hInstance = hcpl;
     psp[id].u.pszTemplate = MAKEINTRESOURCEW(IDD_MAIN);
+    psp[id].pfnDlgProc = init_elements;
+    id++;
+    psp[id].dwSize = sizeof (PROPSHEETPAGEW);
+    psp[id].hInstance = hcpl;
+    psp[id].u.pszTemplate = MAKEINTRESOURCEW(IDD_PATCHES);
     psp[id].pfnDlgProc = init_elements;
     id++;
 

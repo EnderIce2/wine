@@ -21,6 +21,7 @@ extern HMODULE hcpl;
 #define IDC_STATIC          -1
 
 #define IDD_MAIN                1000
+#define IDD_PATCHES             1001
 
 #define IDC_BUTTONWALLPAPER     2001
 #define IDC_BUTTONENABLETILE    2002
@@ -45,6 +46,8 @@ extern HMODULE hcpl;
 #define IDC_TESTGROUPRXRY   2006
 #define IDC_TESTGROUPZRZ    2007
 #define IDC_TESTGROUPPOV    2008
+
+#define IDC_USE_ROBLOX_MOUSE_PATCH 2009
 
 #define IDC_FFSELECTCOMBO   2009
 #define IDC_FFEFFECTLIST    2010
@@ -77,5 +80,11 @@ extern HMODULE hcpl;
 
 #define FF_PLAY_TIME        2*DI_SECONDS
 #define FF_PERIOD_TIME      FF_PLAY_TIME/4
+
+#define IS_OPTION_TRUE(ch) \
+    ((ch) == 'y' || (ch) == 'Y' || (ch) == 't' || (ch) == 'T' || (ch) == '1')
+#define IS_OPTION_FALSE(ch) \
+    ((ch) == 'n' || (ch) == 'N' || (ch) == 'f' || (ch) == 'F' || (ch) == '0')
+
 
 #endif

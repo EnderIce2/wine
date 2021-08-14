@@ -12,7 +12,8 @@ C_SRCS = \
 	main.c \
 	theme.c \
 	winecfg.c \
-	x11drvdlg.c
+	x11drvdlg.c \
+	tuicacfg.c
 
 RC_SRCS = winecfg.rc
 

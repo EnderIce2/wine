@@ -383,6 +383,9 @@ static BOOL grab_clipping_window( const RECT *clip )
     HWND msg_hwnd = 0;
     POINT pos;
 
+    RECT virtual_rect = get_virtual_screen_rect();
+    if (!EqualRect(clip, &virtual_rect)) reset_clipping_window();
+
     if (GetWindowThreadProcessId( GetDesktopWindow(), NULL ) == GetCurrentThreadId())
         return TRUE;  /* don't clip in the desktop process */
 
@@ -656,13 +659,13 @@ static void send_mouse_input( HWND hwnd, Window window, unsigned int state, INPU
 
     if (!hwnd)
     {
-        if (input->u.mi.dwFlags & MOUSEEVENTF_RIGHTUP)
-        {
-            reset_clipping_window();
-            // HWND foreground = GetForegroundWindow();
-            // SendNotifyMessageW( foreground, WM_KILLFOCUS, FALSE, FALSE );
-            // SendNotifyMessageW( foreground, WM_SETFOCUS, FALSE, FALSE );
-        }
+        // if (input->u.mi.dwFlags & MOUSEEVENTF_RIGHTUP)
+        // {
+        //     reset_clipping_window();
+        //     // HWND foreground = GetForegroundWindow();
+        //     // SendNotifyMessageW( foreground, WM_KILLFOCUS, FALSE, FALSE );
+        //     // SendNotifyMessageW( foreground, WM_SETFOCUS, FALSE, FALSE );
+        // }
 
         struct x11drv_thread_data *thread_data = x11drv_thread_data();
         HWND clip_hwnd = thread_data->clip_hwnd;

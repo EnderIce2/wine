@@ -39,6 +39,7 @@ BEGIN
     IDS_TAB_DESKTOP_INTEGRATION "Desktop Integration"
     IDS_TAB_AUDIO           "Audio"
     IDS_TAB_ABOUT           "About"
+    IDS_TAB_TUICACFG        "Țuică"
     IDS_WINECFG_TITLE       "Wine configuration"
     IDS_WINECFG_TITLE_APP   "Wine configuration for %s"
     IDS_THEMEFILE           "Theme files (*.msstyles; *.theme)"
@@ -143,6 +144,21 @@ BEGIN
     EDITTEXT        IDC_ABT_OWNER, 75, 171, 160, 13, ES_AUTOHSCROLL | WS_TABSTOP
     LTEXT           "Organi&zation:", IDC_STATIC, 22, 185, 50, 20
     EDITTEXT        IDC_ABT_ORG, 75, 185, 160, 13, ES_AUTOHSCROLL | WS_TABSTOP
+END
+
+IDD_TUICACFG DIALOGEX 0, 0, 260, 220
+STYLE WS_CHILD
+FONT 8, "MS Shell Dlg"
+BEGIN
+    GROUPBOX        "General", IDC_STATIC, 4, 4, 312, 56
+    PUSHBUTTON      "Choose Wallpaper", IDC_BUTTONWALLPAPER, 10, 10, 60, 15
+    PUSHBUTTON      "Enable Tile", IDC_BUTTONENABLETILE, 80, 10, 60, 15
+    PUSHBUTTON      "Disable Tile", IDC_BUTTONDISABLETILE, 150, 10, 60, 15
+    EDITTEXT        IDC_TEXTBOXLOCATION, 10, 40, 160, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "Type file path (.bmp only!!)", IDC_CURRENTLOCATION, 10, 30, 100, 8
+    GROUPBOX        "Roblox", IDC_STATIC, 4, 4, 312, 56
+    AUTOCHECKBOX    "Mouse Clipping Patch", IDC_USE_ROBLOX_MOUSE_PATCH, 10, 14, 200, 14, BS_TOP
+
 END
 
 IDD_APPCFG DIALOG  0, 0, 260, 220
