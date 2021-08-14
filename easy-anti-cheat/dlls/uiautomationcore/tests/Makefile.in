@@ -1,5 +1,0 @@
-TESTDLL = uiautomationcore.dll
-IMPORTS = uiautomationcore user32
-
-C_SRCS = \
-	uiautomation.c

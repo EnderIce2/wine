@@ -1,6 +1,0 @@
-MODULE    = vmm.vxd
-
-EXTRADLLFLAGS = -mno-cygwin
-
-C_SRCS = \
-	vmm.c

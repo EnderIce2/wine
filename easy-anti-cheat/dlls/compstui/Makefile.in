@@ -1,7 +1,0 @@
-MODULE    = compstui.dll
-IMPORTLIB = compstui
-
-EXTRADLLFLAGS = -mno-cygwin
-
-C_SRCS = \
-	compstui_main.c

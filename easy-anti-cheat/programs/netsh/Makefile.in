@@ -1,5 +1,0 @@
-MODULE    = netsh.exe
-
-EXTRADLLFLAGS = -mconsole -municode -mno-cygwin
-
-C_SRCS = netsh.c

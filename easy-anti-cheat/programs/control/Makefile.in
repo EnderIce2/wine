@@ -1,6 +1,0 @@
-MODULE    = control.exe
-IMPORTS   = shell32 user32
-
-EXTRADLLFLAGS = -mwindows -municode -mno-cygwin
-
-C_SRCS = control.c

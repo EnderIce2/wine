@@ -1,5 +1,0 @@
-TESTDLL = d3dx10_43.dll
-IMPORTS = d3dx10
-
-C_SRCS = \
-	d3dx10.c

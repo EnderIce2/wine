@@ -1,6 +1,0 @@
-MODULE    = virtdisk.dll
-
-EXTRADLLFLAGS = -mno-cygwin
-
-C_SRCS = \
-	virtdisk_main.c

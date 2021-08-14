@@ -1,7 +1,0 @@
-MODULE    = mprapi.dll
-IMPORTLIB = mprapi
-
-EXTRADLLFLAGS = -mno-cygwin
-
-C_SRCS = \
-	mprapi.c

@@ -1,5 +1,0 @@
-TESTDLL   = dbghelp.dll
-IMPORTS   = dbghelp
-
-C_SRCS = \
-	dbghelp.c

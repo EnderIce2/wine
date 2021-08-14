@@ -1,7 +1,0 @@
-MODULE    = rtworkq.dll
-IMPORTLIB = rtworkq
-
-EXTRADLLFLAGS = -mno-cygwin
-
-C_SRCS = \
-	queue.c

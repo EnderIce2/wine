@@ -1,6 +1,0 @@
-MODULE    = icacls.exe
-
-EXTRADLLFLAGS = -mconsole -mno-cygwin
-
-C_SRCS = \
-	icacls_main.c

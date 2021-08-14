@@ -1,5 +1,0 @@
-TESTDLL   = combase.dll
-
-C_SRCS = \
-	roapi.c \
-	string.c

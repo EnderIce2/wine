@@ -1,6 +1,0 @@
-MODULE = dxva2.dll
-
-EXTRADLLFLAGS = -mno-cygwin
-
-C_SRCS = \
-	main.c

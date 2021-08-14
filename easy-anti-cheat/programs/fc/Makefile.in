@@ -1,5 +1,0 @@
-MODULE    = fc.exe
-
-EXTRADLLFLAGS = -mconsole -municode -mno-cygwin
-
-C_SRCS = fc.c

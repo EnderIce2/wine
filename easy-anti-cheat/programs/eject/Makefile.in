@@ -1,5 +1,0 @@
-MODULE    = eject.exe
-
-EXTRADLLFLAGS = -mconsole -mno-cygwin
-
-C_SRCS = eject.c

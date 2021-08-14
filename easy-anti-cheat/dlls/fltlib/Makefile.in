@@ -1,8 +1,0 @@
-MODULE    = fltlib.dll
-
-EXTRADLLFLAGS = -mno-cygwin
-
-C_SRCS = \
-	fltlib.c
-
-RC_SRCS = rsrc.rc

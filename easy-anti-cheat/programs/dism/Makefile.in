@@ -1,5 +1,0 @@
-MODULE    = dism.exe
-
-EXTRADLLFLAGS = -mconsole -municode -mno-cygwin
-
-C_SRCS = dism.c

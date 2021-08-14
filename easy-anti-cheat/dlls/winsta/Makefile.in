@@ -1,6 +1,0 @@
-MODULE    = winsta.dll
-
-EXTRADLLFLAGS = -mno-cygwin
-
-C_SRCS = \
-	main.c

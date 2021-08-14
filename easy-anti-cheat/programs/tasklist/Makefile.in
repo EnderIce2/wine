@@ -1,7 +1,0 @@
-MODULE    = tasklist.exe
-
-EXTRADLLFLAGS = -mconsole -municode -mno-cygwin
-
-C_SRCS = tasklist.c
-
-RC_SRCS = version.rc

@@ -1,5 +1,0 @@
-TESTDLL   = amstream.dll
-IMPORTS   = strmiids uuid ddraw ole32 user32
-
-C_SRCS = \
-	amstream.c

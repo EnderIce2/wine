@@ -1,8 +1,0 @@
-MODULE    = inetmib1.dll
-IMPORTS   = snmpapi
-DELAYIMPORTS = iphlpapi
-
-EXTRADLLFLAGS = -mno-cygwin
-
-C_SRCS = \
-	main.c
