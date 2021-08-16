@@ -14,11 +14,11 @@ echo "============================================"
 echo "                  Making"
 echo "Making wine-32"
 cd ./wine-32
-make -s -j4
+make -s -j12
 echo "Making wine-64"
 cd ..
 cd ./wine-64
-make -s -j4
+make -s -j12
 cd ..
 echo "============================================"
 echo "                Installing"
