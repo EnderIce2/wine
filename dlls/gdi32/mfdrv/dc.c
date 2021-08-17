@@ -25,9 +25,9 @@ BOOL METADC_SaveDC( HDC hdc )
     return metadc_param0( hdc, META_SAVEDC );
 }
 
-BOOL CDECL MFDRV_RestoreDC( PHYSDEV dev, INT level )
+BOOL METADC_RestoreDC( HDC hdc, INT level )
 {
-    return MFDRV_MetaParam1( dev, META_RESTOREDC, level );
+    return metadc_param1( hdc, META_RESTOREDC, level );
 }
 
 BOOL METADC_SetTextAlign( HDC hdc, UINT align )
@@ -40,14 +40,14 @@ BOOL METADC_SetBkMode( HDC hdc, INT mode )
     return metadc_param1( hdc, META_SETBKMODE, (WORD)mode );
 }
 
-COLORREF CDECL MFDRV_SetBkColor( PHYSDEV dev, COLORREF color )
+BOOL METADC_SetBkColor( HDC hdc, COLORREF color )
 {
-    return MFDRV_MetaParam2(dev, META_SETBKCOLOR, HIWORD(color), LOWORD(color)) ? color : CLR_INVALID;
+    return metadc_param2( hdc, META_SETBKCOLOR, HIWORD(color), LOWORD(color) );
 }
 
-COLORREF CDECL MFDRV_SetTextColor( PHYSDEV dev, COLORREF color )
+BOOL METADC_SetTextColor( HDC hdc, COLORREF color )
 {
-    return MFDRV_MetaParam2(dev, META_SETTEXTCOLOR, HIWORD(color), LOWORD(color)) ? color : CLR_INVALID;
+    return metadc_param2( hdc, META_SETTEXTCOLOR, HIWORD(color), LOWORD(color) );
 }
 
 BOOL METADC_SetROP2( HDC hdc, INT rop )
@@ -148,64 +148,4 @@ BOOL METADC_SetTextCharacterExtra( HDC hdc, INT extra )
 BOOL METADC_SetMapperFlags( HDC hdc, DWORD flags )
 {
     return metadc_param2( hdc, META_SETMAPPERFLAGS, HIWORD(flags), LOWORD(flags) );
-}
-
-BOOL CDECL MFDRV_AbortPath( PHYSDEV dev )
-{
-    return FALSE;
-}
-
-BOOL CDECL MFDRV_BeginPath( PHYSDEV dev )
-{
-    return FALSE;
-}
-
-BOOL CDECL MFDRV_CloseFigure( PHYSDEV dev )
-{
-    return FALSE;
-}
-
-BOOL CDECL MFDRV_EndPath( PHYSDEV dev )
-{
-    return FALSE;
-}
-
-BOOL CDECL MFDRV_FillPath( PHYSDEV dev )
-{
-    return FALSE;
-}
-
-BOOL CDECL MFDRV_FlattenPath( PHYSDEV dev )
-{
-    return FALSE;
-}
-
-BOOL CDECL MFDRV_SelectClipPath( PHYSDEV dev, INT iMode )
-{
-    return FALSE;
-}
-
-BOOL CDECL MFDRV_StrokeAndFillPath( PHYSDEV dev )
-{
-    return FALSE;
-}
-
-BOOL CDECL MFDRV_StrokePath( PHYSDEV dev )
-{
-    return FALSE;
-}
-
-BOOL CDECL MFDRV_WidenPath( PHYSDEV dev )
-{
-    return FALSE;
-}
-
-COLORREF CDECL MFDRV_SetDCBrushColor( PHYSDEV dev, COLORREF color )
-{
-    return CLR_INVALID;
-}
-
-COLORREF CDECL MFDRV_SetDCPenColor( PHYSDEV dev, COLORREF color )
-{
-    return CLR_INVALID;
 }

@@ -462,6 +462,16 @@ static int convert_control_headers(struct msghdr *hdr, WSABUF *control)
                     }
 #endif /* IPV6_PKTINFO */
 
+#if defined(IPV6_TCLASS)
+                    case IPV6_TCLASS:
+                    {
+                        ptr = fill_control_message( WS_IPPROTO_IPV6, WS_IPV6_TCLASS, ptr, &ctlsize,
+                                                    CMSG_DATA(cmsg_unix), sizeof(INT) );
+                        if (!ptr) goto error;
+                        break;
+                    }
+#endif /* IPV6_TCLASS */
+
                     default:
                         FIXME("Unhandled IPPROTO_IPV6 message header type %d\n", cmsg_unix->cmsg_type);
                         break;
@@ -1752,9 +1762,6 @@ NTSTATUS sock_ioctl( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, void *apc
             return do_setsockopt( handle, io, IPPROTO_IP, IP_DROP_SOURCE_MEMBERSHIP, in_buffer, in_size );
 
 #ifdef IP_HDRINCL
-        case IOCTL_AFD_WINE_GET_IP_HDRINCL:
-            return do_getsockopt( handle, io, IPPROTO_IP, IP_HDRINCL, out_buffer, out_size );
-
         case IOCTL_AFD_WINE_SET_IP_HDRINCL:
             return do_setsockopt( handle, io, IPPROTO_IP, IP_HDRINCL, in_buffer, in_size );
 #endif
@@ -1914,6 +1921,14 @@ NTSTATUS sock_ioctl( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, void *apc
 
         case IOCTL_AFD_WINE_SET_IPV6_RECVPKTINFO:
             return do_setsockopt( handle, io, IPPROTO_IPV6, IPV6_RECVPKTINFO, in_buffer, in_size );
+#endif
+
+#ifdef IPV6_RECVTCLASS
+        case IOCTL_AFD_WINE_GET_IPV6_RECVTCLASS:
+            return do_getsockopt( handle, io, IPPROTO_IPV6, IPV6_RECVTCLASS, out_buffer, out_size );
+
+        case IOCTL_AFD_WINE_SET_IPV6_RECVTCLASS:
+            return do_setsockopt( handle, io, IPPROTO_IPV6, IPV6_RECVTCLASS, in_buffer, in_size );
 #endif
 
         case IOCTL_AFD_WINE_GET_IPV6_UNICAST_HOPS:

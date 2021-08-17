@@ -72,7 +72,6 @@ typedef struct tagDC
     DWORD        thread;           /* thread owning the DC */
     LONG         refcount;         /* thread refcount */
     LONG         dirty;            /* dirty flag */
-    INT          saveLevel;
     DC_ATTR     *attr;             /* DC attributes accessible by client */
     struct tagDC *saved_dc;
     DWORD_PTR    dwHookData;
@@ -241,6 +240,10 @@ extern DWORD get_image_from_bitmap( BITMAPOBJ *bmp, BITMAPINFO *info,
 extern DWORD put_image_into_bitmap( BITMAPOBJ *bmp, HRGN clip, BITMAPINFO *info,
                                     const struct gdi_image_bits *bits, struct bitblt_coords *src,
                                     struct bitblt_coords *dst ) DECLSPEC_HIDDEN;
+extern UINT get_dib_dc_color_table( HDC hdc, UINT startpos, UINT entries,
+                                    RGBQUAD *colors ) DECLSPEC_HIDDEN;
+extern UINT set_dib_dc_color_table( HDC hdc, UINT startpos, UINT entries,
+                                    const RGBQUAD *colors ) DECLSPEC_HIDDEN;
 extern void dibdrv_set_window_surface( DC *dc, struct window_surface *surface ) DECLSPEC_HIDDEN;
 
 extern NTSTATUS init_opengl_lib( HMODULE module, DWORD reason, const void *ptr_in, void *ptr_out ) DECLSPEC_HIDDEN;
@@ -482,6 +485,8 @@ extern POINT *GDI_Bezier( const POINT *Points, INT count, INT *nPtsOut ) DECLSPE
 /* palette.c */
 extern HPALETTE WINAPI GDISelectPalette( HDC hdc, HPALETTE hpal, WORD wBkg) DECLSPEC_HIDDEN;
 extern HPALETTE PALETTE_Init(void) DECLSPEC_HIDDEN;
+extern UINT get_palette_entries( HPALETTE hpalette, UINT start, UINT count,
+                                 PALETTEENTRY *entries ) DECLSPEC_HIDDEN;
 
 /* region.c */
 extern BOOL add_rect_to_region( HRGN rgn, const RECT *rect ) DECLSPEC_HIDDEN;
@@ -572,7 +577,6 @@ extern BOOL CDECL nulldrv_PolyBezier( PHYSDEV dev, const POINT *points, DWORD co
 extern BOOL CDECL nulldrv_PolyBezierTo( PHYSDEV dev, const POINT *points, DWORD count ) DECLSPEC_HIDDEN;
 extern BOOL CDECL nulldrv_PolyDraw( PHYSDEV dev, const POINT *points, const BYTE *types, DWORD count ) DECLSPEC_HIDDEN;
 extern BOOL CDECL nulldrv_PolylineTo( PHYSDEV dev, const POINT *points, INT count ) DECLSPEC_HIDDEN;
-extern BOOL CDECL nulldrv_RestoreDC( PHYSDEV dev, INT level ) DECLSPEC_HIDDEN;
 extern BOOL CDECL nulldrv_SelectClipPath( PHYSDEV dev, INT mode ) DECLSPEC_HIDDEN;
 extern INT CDECL nulldrv_SetDIBitsToDevice( PHYSDEV dev, INT x_dst, INT y_dst, DWORD width, DWORD height,
                                             INT x_src, INT y_src, UINT start, UINT lines,

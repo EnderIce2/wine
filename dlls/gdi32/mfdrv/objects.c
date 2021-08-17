@@ -34,59 +34,56 @@
 WINE_DEFAULT_DEBUG_CHANNEL(metafile);
 
 /******************************************************************
- *         MFDRV_AddHandle
+ *         metadc_add_handle
  */
-UINT MFDRV_AddHandle( PHYSDEV dev, HGDIOBJ obj )
+UINT metadc_add_handle( struct metadc *metadc, HGDIOBJ obj )
 {
-    METAFILEDRV_PDEVICE *physDev = (METAFILEDRV_PDEVICE *)dev;
     UINT16 index;
 
-    for(index = 0; index < physDev->handles_size; index++)
-        if(physDev->handles[index] == 0) break; 
-    if(index == physDev->handles_size) {
-        physDev->handles_size += HANDLE_LIST_INC;
-        physDev->handles = HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
-                                       physDev->handles,
-                                       physDev->handles_size * sizeof(physDev->handles[0]));
+    for(index = 0; index < metadc->handles_size; index++)
+        if(metadc->handles[index] == 0) break;
+    if(index == metadc->handles_size) {
+        metadc->handles_size += HANDLE_LIST_INC;
+        metadc->handles = HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+                                       metadc->handles,
+                                       metadc->handles_size * sizeof(metadc->handles[0]));
     }
-    physDev->handles[index] = get_full_gdi_handle( obj );
+    metadc->handles[index] = get_full_gdi_handle( obj );
 
-    physDev->cur_handles++; 
-    if(physDev->cur_handles > physDev->mh->mtNoObjects)
-        physDev->mh->mtNoObjects++;
+    metadc->cur_handles++;
+    if(metadc->cur_handles > metadc->mh->mtNoObjects)
+        metadc->mh->mtNoObjects++;
 
     return index ; /* index 0 is not reserved for metafiles */
 }
 
 /******************************************************************
- *         MFDRV_RemoveHandle
+ *         metadc_remove_handle
  */
-BOOL MFDRV_RemoveHandle( PHYSDEV dev, UINT index )
+BOOL metadc_remove_handle( struct metadc *metadc, UINT index )
 {
-    METAFILEDRV_PDEVICE *physDev = (METAFILEDRV_PDEVICE *)dev;
     BOOL ret = FALSE;
 
-    if (index < physDev->handles_size && physDev->handles[index])
+    if (index < metadc->handles_size && metadc->handles[index])
     {
-        physDev->handles[index] = 0;
-        physDev->cur_handles--;
+        metadc->handles[index] = 0;
+        metadc->cur_handles--;
         ret = TRUE;
     }
     return ret;
 }
 
 /******************************************************************
- *         MFDRV_FindObject
+ *         metadc_find_object
  */
-static INT16 MFDRV_FindObject( PHYSDEV dev, HGDIOBJ obj )
+static INT16 metadc_find_object( struct metadc *metadc, HGDIOBJ obj )
 {
-    METAFILEDRV_PDEVICE *physDev = (METAFILEDRV_PDEVICE *)dev;
     INT16 index;
 
-    for(index = 0; index < physDev->handles_size; index++)
-        if(physDev->handles[index] == obj) break;
+    for (index = 0; index < metadc->handles_size; index++)
+        if (metadc->handles[index] == obj) break;
 
-    if(index == physDev->handles_size) return -1;
+    if (index == metadc->handles_size) return -1;
 
     return index ;
 }
@@ -97,11 +94,11 @@ static INT16 MFDRV_FindObject( PHYSDEV dev, HGDIOBJ obj )
  */
 void METADC_DeleteObject( HDC hdc, HGDIOBJ obj )
 {
-    METAFILEDRV_PDEVICE *metadc = get_metadc_ptr( hdc );
+    struct metadc *metadc = get_metadc_ptr( hdc );
     METARECORD mr;
     INT16 index;
 
-    if ((index = MFDRV_FindObject( &metadc->dev, obj )) < 0) return;
+    if ((index = metadc_find_object( metadc, obj )) < 0) return;
     if (obj == metadc->pen || obj == metadc->brush || obj == metadc->font)
     {
         WARN( "deleting selected object %p\n", obj );
@@ -112,7 +109,7 @@ void METADC_DeleteObject( HDC hdc, HGDIOBJ obj )
     mr.rdFunction = META_DELETEOBJECT;
     mr.rdParm[0] = index;
 
-    MFDRV_WriteRecord( &metadc->dev, &mr, mr.rdSize*2 );
+    metadc_write_record( metadc, &mr, mr.rdSize * 2 );
 
     metadc->handles[index] = 0;
     metadc->cur_handles--;
@@ -122,23 +119,21 @@ void METADC_DeleteObject( HDC hdc, HGDIOBJ obj )
 /***********************************************************************
  *           MFDRV_SelectObject
  */
-static BOOL MFDRV_SelectObject( PHYSDEV dev, INT16 index)
+static BOOL metadc_select_object( HDC hdc, INT16 index)
 {
     METARECORD mr;
 
     mr.rdSize = sizeof mr / 2;
     mr.rdFunction = META_SELECTOBJECT;
     mr.rdParm[0] = index;
-
-    return MFDRV_WriteRecord( dev, &mr, mr.rdSize*2 );
+    return metadc_record( hdc, &mr, mr.rdSize*2 );
 }
 
 
 /******************************************************************
- *         MFDRV_CreateBrushIndirect
+ *         metadc_create_brush
  */
-
-INT16 MFDRV_CreateBrushIndirect(PHYSDEV dev, HBRUSH hBrush )
+INT16 metadc_create_brush( struct metadc *metadc, HBRUSH hBrush )
 {
     DWORD size;
     METARECORD *mr;
@@ -209,12 +204,12 @@ INT16 MFDRV_CreateBrushIndirect(PHYSDEV dev, HBRUSH hBrush )
 	    FIXME("Unknown brush style %x\n", logbrush.lbStyle);
 	    return 0;
     }
-    r = MFDRV_WriteRecord( dev, mr, mr->rdSize * 2);
+    r = metadc_write_record( metadc, mr, mr->rdSize * 2 );
     HeapFree(GetProcessHeap(), 0, mr);
     if( !r )
         return -1;
 done:
-    return MFDRV_AddHandle( dev, hBrush );
+    return metadc_add_handle( metadc, hBrush );
 }
 
 
@@ -223,29 +218,28 @@ done:
  */
 static HBRUSH METADC_SelectBrush( HDC hdc, HBRUSH hbrush )
 {
-    METAFILEDRV_PDEVICE *metadc = get_metadc_ptr( hdc );
+    struct metadc *metadc = get_metadc_ptr( hdc );
     INT16 index;
     HBRUSH ret;
 
-    index = MFDRV_FindObject( &metadc->dev, hbrush );
+    index = metadc_find_object( metadc, hbrush );
     if( index < 0 )
     {
-        index = MFDRV_CreateBrushIndirect( &metadc->dev, hbrush );
+        index = metadc_create_brush( metadc, hbrush );
         if( index < 0 )
             return 0;
         GDI_hdc_using_object( hbrush, hdc, METADC_DeleteObject );
     }
-    if (!MFDRV_SelectObject( &metadc->dev, index )) return 0;
+    if (!metadc_select_object( hdc, index )) return 0;
     ret = metadc->brush;
     metadc->brush = hbrush;
     return ret;
 }
 
 /******************************************************************
- *         MFDRV_CreateFontIndirect
+ *         metadc_create_font
  */
-
-static UINT16 MFDRV_CreateFontIndirect(PHYSDEV dev, HFONT hFont, LOGFONTW *logfont)
+static UINT16 metadc_create_font( struct metadc *metadc, HFONT hFont, LOGFONTW *logfont )
 {
     char buffer[sizeof(METARECORD) - 2 + sizeof(LOGFONT16)];
     METARECORD *mr = (METARECORD *)&buffer;
@@ -273,9 +267,9 @@ static UINT16 MFDRV_CreateFontIndirect(PHYSDEV dev, HFONT hFont, LOGFONTW *logfo
     /* Zero pad the facename buffer, so that we don't write uninitialized data to disk */
     memset(font16->lfFaceName + written, 0, LF_FACESIZE - written);
 
-    if (!(MFDRV_WriteRecord( dev, mr, mr->rdSize * 2)))
+    if (!metadc_write_record( metadc, mr, mr->rdSize * 2 ))
         return 0;
-    return MFDRV_AddHandle( dev, hFont );
+    return metadc_add_handle( metadc, hFont );
 }
 
 
@@ -284,31 +278,31 @@ static UINT16 MFDRV_CreateFontIndirect(PHYSDEV dev, HFONT hFont, LOGFONTW *logfo
  */
 static HFONT METADC_SelectFont( HDC hdc, HFONT hfont )
 {
-    METAFILEDRV_PDEVICE *metadc = get_metadc_ptr( hdc );
+    struct metadc *metadc = get_metadc_ptr( hdc );
     LOGFONTW font;
     INT16 index;
     HFONT ret;
 
-    index = MFDRV_FindObject( &metadc->dev, hfont );
+    index = metadc_find_object( metadc, hfont );
     if( index < 0 )
     {
         if (!GetObjectW( hfont, sizeof(font), &font ))
             return 0;
-        index = MFDRV_CreateFontIndirect( &metadc->dev, hfont, &font );
+        index = metadc_create_font( metadc, hfont, &font );
         if( index < 0 )
             return 0;
         GDI_hdc_using_object( hfont, hdc, METADC_DeleteObject );
     }
-    if (!MFDRV_SelectObject( &metadc->dev, index )) return 0;
+    if (!metadc_select_object( hdc, index )) return 0;
     ret = metadc->font;
     metadc->font = hfont;
     return ret;
 }
 
 /******************************************************************
- *         MFDRV_CreatePenIndirect
+ *         metadc_create_pen
  */
-static UINT16 MFDRV_CreatePenIndirect(PHYSDEV dev, HPEN hPen, LOGPEN16 *logpen)
+static UINT16 metadc_create_pen( struct metadc *metadc, HPEN hPen, LOGPEN16 *logpen )
 {
     char buffer[sizeof(METARECORD) - 2 + sizeof(*logpen)];
     METARECORD *mr = (METARECORD *)&buffer;
@@ -316,9 +310,9 @@ static UINT16 MFDRV_CreatePenIndirect(PHYSDEV dev, HPEN hPen, LOGPEN16 *logpen)
     mr->rdSize = (sizeof(METARECORD) + sizeof(*logpen) - 2) / 2;
     mr->rdFunction = META_CREATEPENINDIRECT;
     memcpy(&(mr->rdParm), logpen, sizeof(*logpen));
-    if (!(MFDRV_WriteRecord( dev, mr, mr->rdSize * 2)))
+    if (!metadc_write_record( metadc, mr, mr->rdSize * 2 ))
         return 0;
-    return MFDRV_AddHandle( dev, hPen );
+    return metadc_add_handle( metadc, hPen );
 }
 
 
@@ -327,12 +321,12 @@ static UINT16 MFDRV_CreatePenIndirect(PHYSDEV dev, HPEN hPen, LOGPEN16 *logpen)
  */
 static HPEN METADC_SelectPen( HDC hdc, HPEN hpen )
 {
-    METAFILEDRV_PDEVICE *metadc = get_metadc_ptr( hdc );
+    struct metadc *metadc = get_metadc_ptr( hdc );
     LOGPEN16 logpen;
     INT16 index;
     HPEN ret;
 
-    index = MFDRV_FindObject( &metadc->dev, hpen );
+    index = metadc_find_object( metadc, hpen );
     if( index < 0 )
     {
         /* must be an extended pen */
@@ -364,13 +358,14 @@ static HPEN METADC_SelectPen( HDC hdc, HPEN hpen )
             HeapFree( GetProcessHeap(), 0, elp );
         }
 
-        index = MFDRV_CreatePenIndirect( &metadc->dev, hpen, &logpen );
+        index = metadc_create_pen( metadc, hpen, &logpen );
         if( index < 0 )
             return 0;
         GDI_hdc_using_object( hpen, hdc, METADC_DeleteObject );
     }
 
-    if (!MFDRV_SelectObject( &metadc->dev, index )) return 0;
+
+    if (!metadc_select_object( hdc, index )) return 0;
     ret = metadc->pen;
     metadc->pen = hpen;
     return ret;
@@ -378,9 +373,10 @@ static HPEN METADC_SelectPen( HDC hdc, HPEN hpen )
 
 
 /******************************************************************
- *         MFDRV_CreatePalette
+ *         metadc_create_palette
  */
-static BOOL MFDRV_CreatePalette(PHYSDEV dev, HPALETTE hPalette, LOGPALETTE* logPalette, int sizeofPalette)
+static BOOL metadc_create_palette( struct metadc *metadc, HPALETTE hPalette, LOGPALETTE *logPalette,
+                                   int sizeofPalette )
 {
     int index;
     BOOL ret;
@@ -390,7 +386,7 @@ static BOOL MFDRV_CreatePalette(PHYSDEV dev, HPALETTE hPalette, LOGPALETTE* logP
     mr->rdSize = (sizeof(METARECORD) + sizeofPalette - sizeof(WORD)) / sizeof(WORD);
     mr->rdFunction = META_CREATEPALETTE;
     memcpy(&(mr->rdParm), logPalette, sizeofPalette);
-    if (!(MFDRV_WriteRecord( dev, mr, mr->rdSize * sizeof(WORD))))
+    if (!metadc_write_record( metadc, mr, mr->rdSize * sizeof(WORD) ))
     {
         HeapFree(GetProcessHeap(), 0, mr);
         return FALSE;
@@ -399,11 +395,11 @@ static BOOL MFDRV_CreatePalette(PHYSDEV dev, HPALETTE hPalette, LOGPALETTE* logP
     mr->rdSize = sizeof(METARECORD) / sizeof(WORD);
     mr->rdFunction = META_SELECTPALETTE;
 
-    if ((index = MFDRV_AddHandle( dev, hPalette )) == -1) ret = FALSE;
+    if ((index = metadc_add_handle( metadc, hPalette )) == -1) ret = FALSE;
     else
     {
         *(mr->rdParm) = index;
-        ret = MFDRV_WriteRecord( dev, mr, mr->rdSize * sizeof(WORD));
+        ret = metadc_write_record( metadc, mr, mr->rdSize * sizeof(WORD) );
     }
     HeapFree(GetProcessHeap(), 0, mr);
     return ret;
@@ -417,7 +413,7 @@ BOOL METADC_SelectPalette( HDC hdc, HPALETTE palette )
 {
 #define PALVERSION 0x0300
 
-    METAFILEDRV_PDEVICE *metadc;
+    struct metadc *metadc;
     PLOGPALETTE logPalette;
     WORD        wNumEntries = 0;
     BOOL        ret;
@@ -438,7 +434,7 @@ BOOL METADC_SelectPalette( HDC hdc, HPALETTE palette )
 
     GetPaletteEntries( palette, 0, wNumEntries, logPalette->palPalEntry );
 
-    ret = MFDRV_CreatePalette( &metadc->dev, palette, logPalette, sizeofPalette );
+    ret = metadc_create_palette( metadc, palette, logPalette, sizeofPalette );
 
     HeapFree( GetProcessHeap(), 0, logPalette );
     return ret;

@@ -153,6 +153,8 @@ BOOL WINAPI DeleteObject( HGDIOBJ obj )
     struct hdc_list *hdc_list = NULL;
     struct wine_rb_entry *entry;
 
+    if (is_meta_dc( obj )) return METADC_DeleteDC( obj );
+
     EnterCriticalSection( &obj_map_cs );
 
     if ((entry = wine_rb_get( &obj_map, obj )))
@@ -515,4 +517,98 @@ HCOLORSPACE WINAPI SetColorSpace( HDC hdc, HCOLORSPACE cs )
 {
     FIXME( "stub\n" );
     return cs;
+}
+
+/***********************************************************************
+ *           CreatePalette     (GDI32.@)
+ */
+HPALETTE WINAPI CreatePalette( const LOGPALETTE *palette )
+{
+    if (!palette) return 0;
+    return NtGdiCreatePaletteInternal( palette, palette->palNumEntries );
+}
+
+/***********************************************************************
+ *           GetPaletteEntries    (GDI32.@)
+ */
+UINT WINAPI GetPaletteEntries( HPALETTE palette, UINT start, UINT count, PALETTEENTRY *entries )
+{
+    return NtGdiDoPalette( palette, start, count, entries, NtGdiGetPaletteEntries, TRUE );
+}
+
+/***********************************************************************
+ *           SetPaletteEntries    (GDI32.@)
+ */
+UINT WINAPI SetPaletteEntries( HPALETTE palette, UINT start, UINT count,
+                               const PALETTEENTRY *entries )
+{
+    return NtGdiDoPalette( palette, start, count, (void *)entries, NtGdiSetPaletteEntries, FALSE );
+}
+
+/***********************************************************************
+ *           AnimatePalette    (GDI32.@)
+ */
+BOOL WINAPI AnimatePalette( HPALETTE palette, UINT start, UINT count, const PALETTEENTRY *entries )
+{
+    return NtGdiDoPalette( palette, start, count, (void *)entries, NtGdiAnimatePalette, FALSE );
+}
+
+/* first and last 10 entries are the default system palette entries */
+static const PALETTEENTRY default_system_palette_low[] =
+{
+    { 0x00, 0x00, 0x00 }, { 0x80, 0x00, 0x00 }, { 0x00, 0x80, 0x00 }, { 0x80, 0x80, 0x00 },
+    { 0x00, 0x00, 0x80 }, { 0x80, 0x00, 0x80 }, { 0x00, 0x80, 0x80 }, { 0xc0, 0xc0, 0xc0 },
+    { 0xc0, 0xdc, 0xc0 }, { 0xa6, 0xca, 0xf0 }
+};
+static const PALETTEENTRY default_system_palette_high[] =
+{
+    { 0xff, 0xfb, 0xf0 }, { 0xa0, 0xa0, 0xa4 }, { 0x80, 0x80, 0x80 }, { 0xff, 0x00, 0x00 },
+    { 0x00, 0xff, 0x00 }, { 0xff, 0xff, 0x00 }, { 0x00, 0x00, 0xff }, { 0xff, 0x00, 0xff },
+    { 0x00, 0xff, 0xff }, { 0xff, 0xff, 0xff }
+};
+
+/***********************************************************************
+ *           GetSystemPaletteEntries    (GDI32.@)
+ *
+ * Gets range of palette entries.
+ */
+UINT WINAPI GetSystemPaletteEntries( HDC hdc, UINT start, UINT count, PALETTEENTRY *entries )
+{
+    UINT i, ret;
+
+    ret = NtGdiDoPalette( hdc, start, count, (void *)entries,
+                          NtGdiGetSystemPaletteEntries, FALSE );
+    if (ret) return ret;
+
+    /* always fill output, even if hdc is an invalid handle */
+    if (!entries || start >= 256) return 0;
+    if (start + count > 256) count = 256 - start;
+
+    for (i = 0; i < count; i++)
+    {
+        if (start + i < 10)
+            entries[i] = default_system_palette_low[start + i];
+        else if (start + i >= 246)
+            entries[i] = default_system_palette_high[start + i - 246];
+        else
+            memset( &entries[i], 0, sizeof(entries[i]) );
+    }
+
+    return 0;
+}
+
+/***********************************************************************
+ *           GetDIBColorTable    (GDI32.@)
+ */
+UINT WINAPI GetDIBColorTable( HDC hdc, UINT start, UINT count, RGBQUAD *colors )
+{
+    return NtGdiDoPalette( hdc, start, count, colors, NtGdiGetDIBColorTable, TRUE );
+}
+
+/***********************************************************************
+ *           SetDIBColorTable    (GDI32.@)
+ */
+UINT WINAPI SetDIBColorTable( HDC hdc, UINT start, UINT count, const RGBQUAD *colors )
+{
+    return NtGdiDoPalette( hdc, start, count, (void *)colors, NtGdiSetDIBColorTable, FALSE );
 }

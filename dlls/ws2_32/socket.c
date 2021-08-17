@@ -311,6 +311,7 @@ static inline const char *debugstr_sockopt(int level, int optname)
             DEBUG_SOCKOPT(IPV6_MULTICAST_HOPS);
             DEBUG_SOCKOPT(IPV6_MULTICAST_LOOP);
             DEBUG_SOCKOPT(IPV6_PKTINFO);
+            DEBUG_SOCKOPT(IPV6_RECVTCLASS);
             DEBUG_SOCKOPT(IPV6_UNICAST_HOPS);
             DEBUG_SOCKOPT(IPV6_V6ONLY);
             DEBUG_SOCKOPT(IPV6_UNICAST_IF);
@@ -1676,9 +1677,6 @@ int WINAPI getsockopt( SOCKET s, int level, int optname, char *optval, int *optl
         case IP_DONTFRAGMENT:
             return server_getsockopt( s, IOCTL_AFD_WINE_GET_IP_DONTFRAGMENT, optval, optlen );
 
-        case IP_HDRINCL:
-            return server_getsockopt( s, IOCTL_AFD_WINE_GET_IP_HDRINCL, optval, optlen );
-
         case IP_MULTICAST_IF:
             return server_getsockopt( s, IOCTL_AFD_WINE_GET_IP_MULTICAST_IF, optval, optlen );
 
@@ -1702,6 +1700,10 @@ int WINAPI getsockopt( SOCKET s, int level, int optname, char *optval, int *optl
 
         case IP_UNICAST_IF:
             return server_getsockopt( s, IOCTL_AFD_WINE_GET_IP_UNICAST_IF, optval, optlen );
+
+        case IP_HDRINCL:
+            SetLastError( WSAEINVAL );
+            return -1;
 
         default:
             FIXME( "unrecognized IP option %u\n", optname );
@@ -1733,6 +1735,9 @@ int WINAPI getsockopt( SOCKET s, int level, int optname, char *optval, int *optl
 
         case IPV6_PKTINFO:
             return server_getsockopt( s, IOCTL_AFD_WINE_GET_IPV6_RECVPKTINFO, optval, optlen );
+
+        case IPV6_RECVTCLASS:
+            return server_getsockopt( s, IOCTL_AFD_WINE_GET_IPV6_RECVTCLASS, optval, optlen );
 
         case IPV6_UNICAST_HOPS:
             return server_getsockopt( s, IOCTL_AFD_WINE_GET_IPV6_UNICAST_HOPS, optval, optlen );
@@ -2838,6 +2843,7 @@ int WINAPI setsockopt( SOCKET s, int level, int optname, const char *optval, int
 
         default:
             FIXME("opt_name:%x\n", optname);
+            SetLastError(WSAENOPROTOOPT);
             return SOCKET_ERROR;
         }
         break; /* case NSPROTO_IPX */
@@ -2850,6 +2856,7 @@ int WINAPI setsockopt( SOCKET s, int level, int optname, const char *optval, int
 
         default:
             FIXME("Unknown IPPROTO_TCP optname 0x%08x\n", optname);
+            SetLastError(WSAENOPROTOOPT);
             return SOCKET_ERROR;
         }
         break;
@@ -2907,6 +2914,7 @@ int WINAPI setsockopt( SOCKET s, int level, int optname, const char *optval, int
 
         default:
             FIXME("Unknown IPPROTO_IP optname 0x%08x\n", optname);
+            SetLastError(WSAENOPROTOOPT);
             return SOCKET_ERROR;
         }
         break;
@@ -2942,6 +2950,9 @@ int WINAPI setsockopt( SOCKET s, int level, int optname, const char *optval, int
             FIXME("IPV6_PROTECTION_LEVEL is ignored!\n");
             return 0;
 
+        case IPV6_RECVTCLASS:
+            return server_setsockopt( s, IOCTL_AFD_WINE_SET_IPV6_RECVTCLASS, optval, optlen );
+
         case IPV6_UNICAST_HOPS:
             return server_setsockopt( s, IOCTL_AFD_WINE_SET_IPV6_UNICAST_HOPS, optval, optlen );
 
@@ -2953,6 +2964,7 @@ int WINAPI setsockopt( SOCKET s, int level, int optname, const char *optval, int
 
         default:
             FIXME("Unknown IPPROTO_IPV6 optname 0x%08x\n", optname);
+            SetLastError(WSAENOPROTOOPT);
             return SOCKET_ERROR;
         }
         break;

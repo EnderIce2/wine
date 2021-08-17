@@ -3843,7 +3843,6 @@ const struct gdi_dc_funcs font_driver =
     NULL,                           /* pFlattenPath */
     font_FontIsLinked,              /* pFontIsLinked */
     NULL,                           /* pFrameRgn */
-    NULL,                           /* pGdiComment */
     NULL,                           /* pGetBoundsRect */
     font_GetCharABCWidths,          /* pGetCharABCWidths */
     font_GetCharABCWidthsI,         /* pGetCharABCWidthsI */
@@ -3886,7 +3885,6 @@ const struct gdi_dc_funcs font_driver =
     NULL,                           /* pRealizePalette */
     NULL,                           /* pRectangle */
     NULL,                           /* pResetDC */
-    NULL,                           /* pRestoreDC */
     NULL,                           /* pRoundRect */
     NULL,                           /* pSelectBitmap */
     NULL,                           /* pSelectBrush */
@@ -5626,7 +5624,7 @@ BOOL CDECL nulldrv_ExtTextOut( PHYSDEV dev, INT x, INT y, UINT flags, const RECT
     if (flags & ETO_OPAQUE)
     {
         RECT rc = *rect;
-        HBRUSH brush = CreateSolidBrush( GetNearestColor( dev->hdc, dc->attr->background_color ) );
+        HBRUSH brush = CreateSolidBrush( NtGdiGetNearestColor( dev->hdc, dc->attr->background_color ));
 
         if (brush)
         {

@@ -343,7 +343,7 @@ static INT count_abs_axis(int device_fd)
     return abs_count;
 }
 
-static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_device *dev)
+static NTSTATUS build_report_descriptor(struct wine_input_private *ext, struct udev_device *dev)
 {
     struct input_absinfo abs_info[HID_ABS_MAX];
     BYTE absbits[(ABS_MAX+7)/8];
@@ -357,18 +357,18 @@ static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_
     if (ioctl(ext->base.device_fd, EVIOCGBIT(EV_REL, sizeof(relbits)), relbits) == -1)
     {
         WARN("ioctl(EVIOCGBIT, EV_REL) failed: %d %s\n", errno, strerror(errno));
-        return FALSE;
+        memset(relbits, 0, sizeof(relbits));
     }
     if (ioctl(ext->base.device_fd, EVIOCGBIT(EV_ABS, sizeof(absbits)), absbits) == -1)
     {
         WARN("ioctl(EVIOCGBIT, EV_ABS) failed: %d %s\n", errno, strerror(errno));
-        return FALSE;
+        memset(absbits, 0, sizeof(absbits));
     }
 
     report_size = 0;
 
     if (!hid_descriptor_begin(&ext->desc, device_usage[0], device_usage[1]))
-        return FALSE;
+        return STATUS_NO_MEMORY;
 
     abs_count = 0;
     for (i = 0; i < HID_ABS_MAX; i++)
@@ -381,7 +381,7 @@ static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_
 
         if (!hid_descriptor_add_axes(&ext->desc, 1, usage.UsagePage, &usage.Usage, FALSE, 32,
                                      LE_DWORD(abs_info[i].minimum), LE_DWORD(abs_info[i].maximum)))
-            return FALSE;
+            return STATUS_NO_MEMORY;
 
         ext->abs_map[i] = report_size;
         report_size += 4;
@@ -397,7 +397,7 @@ static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_
 
         if (!hid_descriptor_add_axes(&ext->desc, 1, usage.UsagePage, &usage.Usage, TRUE, 8,
                                      0x81, 0x7f))
-            return FALSE;
+            return STATUS_NO_MEMORY;
 
         ext->rel_map[i] = report_size;
         report_size++;
@@ -410,13 +410,13 @@ static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_
     if (button_count)
     {
         if (!hid_descriptor_add_buttons(&ext->desc, HID_USAGE_PAGE_BUTTON, 1, button_count))
-            return FALSE;
+            return STATUS_NO_MEMORY;
 
         if (button_count % 8)
         {
             BYTE padding = 8 - (button_count % 8);
             if (!hid_descriptor_add_padding(&ext->desc, padding))
-                return FALSE;
+                return STATUS_NO_MEMORY;
         }
 
         report_size += (button_count + 7) / 8;
@@ -436,11 +436,11 @@ static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_
     if (hat_count)
     {
         if (!hid_descriptor_add_hatswitch(&ext->desc, hat_count))
-            return FALSE;
+            return STATUS_NO_MEMORY;
     }
 
     if (!hid_descriptor_end(&ext->desc))
-        return FALSE;
+        return STATUS_NO_MEMORY;
 
     TRACE("Report will be %i bytes\n", report_size);
 
@@ -456,13 +456,13 @@ static BOOL build_report_descriptor(struct wine_input_private *ext, struct udev_
         if (test_bit(absbits, i))
             set_abs_axis_value(ext, i, abs_info[i].value);
 
-    return TRUE;
+    return STATUS_SUCCESS;
 
 failed:
     HeapFree(GetProcessHeap(), 0, ext->current_report_buffer);
     HeapFree(GetProcessHeap(), 0, ext->last_report_buffer);
     hid_descriptor_free(&ext->desc);
-    return FALSE;
+    return STATUS_NO_MEMORY;
 }
 
 static BOOL set_report_from_event(struct wine_input_private *ext, struct input_event *ie)
@@ -995,91 +995,59 @@ static int check_device_syspath(DEVICE_OBJECT *device, void* context)
     return strcmp(get_device_syspath(private->udev_device), context);
 }
 
-static int parse_uevent_info(const char *uevent, DWORD *vendor_id,
-                             DWORD *product_id, WORD *input, WCHAR **serial_number)
+static void get_device_subsystem_info(struct udev_device *dev, char const *subsystem, DWORD *vendor_id,
+                                      DWORD *product_id, DWORD *input, DWORD *version, WCHAR **serial_number)
 {
-    DWORD bus_type;
-    char *tmp;
-    char *saveptr = NULL;
-    char *line;
-    char *key;
-    char *value;
+    struct udev_device *parent = NULL;
+    const char *ptr, *next, *tmp;
+    char buffer[256];
+    DWORD bus = 0;
 
-    int found_id = 0;
-    int found_serial = 0;
+    if (!(parent = udev_device_get_parent_with_subsystem_devtype(dev, subsystem, NULL))) return;
 
-    tmp = heap_alloc(strlen(uevent) + 1);
-    strcpy(tmp, uevent);
-    line = strtok_r(tmp, "\n", &saveptr);
-    while (line != NULL)
+    if ((next = udev_device_get_sysattr_value(parent, "uevent")))
     {
-        /* line: "KEY=value" */
-        key = line;
-        value = strchr(line, '=');
-        if (!value)
+        while ((ptr = next) && *ptr)
         {
-            goto next_line;
-        }
-        *value = '\0';
-        value++;
+            if ((next = strchr(next, '\n'))) next += 1;
+            else next = ptr + strlen(ptr);
+            TRACE("%s uevent %s\n", subsystem, debugstr_an(ptr, next - ptr - 1));
 
-        if (strcmp(key, "HID_ID") == 0)
-        {
-            /**
-             *        type vendor   product
-             * HID_ID=0003:000005AC:00008242
-             **/
-            int ret = sscanf(value, "%x:%x:%x", &bus_type, vendor_id, product_id);
-            if (ret == 3)
-                found_id = 1;
-        }
-        else if (strcmp(key, "HID_UNIQ") == 0)
-        {
-            /* The caller has to free the serial number */
-            if (*value)
+            if (!strncmp(ptr, "HID_UNIQ=", 9))
             {
-                *serial_number = strdupAtoW(value);
-                found_serial = 1;
+                if (sscanf(ptr, "HID_UNIQ=%256s\n", buffer) != 1 || !*buffer) continue;
+                if (!*serial_number) *serial_number = strdupAtoW(buffer);
+            }
+            if (!strncmp(ptr, "HID_PHYS=", 9) || !strncmp(ptr, "PHYS=\"", 6))
+            {
+                if (!(tmp = strstr(ptr, "/input")) || tmp >= next) continue;
+                if (*input == -1) sscanf(tmp, "/input%d\n", input);
+            }
+            if (!strncmp(ptr, "HID_ID=", 7))
+            {
+                if (bus || *vendor_id || *product_id) continue;
+                sscanf(ptr, "HID_ID=%x:%x:%x\n", &bus, vendor_id, product_id);
+            }
+            if (!strncmp(ptr, "PRODUCT=", 8))
+            {
+                if (*version) continue;
+                if (!strcmp(subsystem, "usb"))
+                    sscanf(ptr, "PRODUCT=%x/%x/%x\n", vendor_id, product_id, version);
+                else
+                    sscanf(ptr, "PRODUCT=%x/%x/%x/%x\n", &bus, vendor_id, product_id, version);
             }
         }
-        else if (strcmp(key, "HID_PHYS") == 0)
-        {
-            const char *input_no = strstr(value, "input");
-            if (input_no)
-                *input = atoi(input_no+5 );
-        }
-
-next_line:
-        line = strtok_r(NULL, "\n", &saveptr);
     }
-
-    heap_free(tmp);
-    return (found_id && found_serial);
-}
-
-static DWORD a_to_bcd(const char *s)
-{
-    DWORD r = 0;
-    const char *c;
-    int shift = strlen(s) - 1;
-    for (c = s; *c; ++c)
-    {
-        r |= (*c - '0') << (shift * 4);
-        --shift;
-    }
-    return r;
 }
 
 static void try_add_device(struct udev_device *dev)
 {
-    DWORD vid = 0, pid = 0, version = 0;
-    struct udev_device *hiddev = NULL, *walk_device;
+    DWORD vid = 0, pid = 0, version = 0, input = -1;
     DEVICE_OBJECT *device = NULL;
     const char *subsystem;
     const char *devnode;
     WCHAR *serial = NULL;
     BOOL is_gamepad = FALSE;
-    WORD input = -1;
     int fd;
     static const CHAR *base_serial = "0000";
 
@@ -1095,8 +1063,8 @@ static void try_add_device(struct udev_device *dev)
     TRACE("udev %s syspath %s\n", debugstr_a(devnode), udev_device_get_syspath(dev));
 
 #ifdef HAS_PROPER_INPUT_HEADER
-    device = bus_enumerate_hid_devices(&lnxev_vtbl, check_device_syspath, (void *)get_device_syspath(dev));
-    if (!device) device = bus_enumerate_hid_devices(&hidraw_vtbl, check_device_syspath, (void *)get_device_syspath(dev));
+    device = bus_enumerate_hid_devices(lnxev_busidW, check_device_syspath, (void *)get_device_syspath(dev));
+    if (!device) device = bus_enumerate_hid_devices(hidraw_busidW, check_device_syspath, (void *)get_device_syspath(dev));
     if (device)
     {
         TRACE("duplicate device found, not adding the new one\n");
@@ -1105,47 +1073,33 @@ static void try_add_device(struct udev_device *dev)
     }
 #endif
 
-    subsystem = udev_device_get_subsystem(dev);
-    hiddev = udev_device_get_parent_with_subsystem_devtype(dev, "hid", NULL);
-    if (hiddev)
-    {
-        const char *bcdDevice = NULL;
-        parse_uevent_info(udev_device_get_sysattr_value(hiddev, "uevent"),
-                          &vid, &pid, &input, &serial);
-        if (serial == NULL)
-            serial = strdupAtoW(base_serial);
+    get_device_subsystem_info(dev, "hid", &vid, &pid, &input, &version, &serial);
+    get_device_subsystem_info(dev, "input", &vid, &pid, &input, &version, &serial);
+    get_device_subsystem_info(dev, "usb", &vid, &pid, &input, &version, &serial);
 
-        walk_device = dev;
-        while (walk_device && !bcdDevice)
-        {
-            bcdDevice = udev_device_get_sysattr_value(walk_device, "bcdDevice");
-            walk_device = udev_device_get_parent(walk_device);
-        }
-        if (bcdDevice)
-        {
-            version = a_to_bcd(bcdDevice);
-        }
-    }
+    subsystem = udev_device_get_subsystem(dev);
 #ifdef HAS_PROPER_INPUT_HEADER
-    else
+    if (!strcmp(subsystem, "input"))
     {
         struct input_id device_id = {0};
         char device_uid[255];
 
         if (ioctl(fd, EVIOCGID, &device_id) < 0)
             WARN("ioctl(EVIOCGID) failed: %d %s\n", errno, strerror(errno));
+        else
+        {
+            vid = device_id.vendor;
+            pid = device_id.product;
+            version = device_id.version;
+        }
+
         device_uid[0] = 0;
         if (ioctl(fd, EVIOCGUNIQ(254), device_uid) >= 0 && device_uid[0])
             serial = strdupAtoW(device_uid);
-
-        vid = device_id.vendor;
-        pid = device_id.product;
-        version = device_id.version;
     }
-#else
-    else
-        WARN("Could not get device to query VID, PID, Version and Serial\n");
 #endif
+
+    if (serial == NULL) serial = strdupAtoW(base_serial);
 
     if (is_xbox_gamepad(vid, pid))
         is_gamepad = TRUE;
@@ -1161,9 +1115,8 @@ static void try_add_device(struct udev_device *dev)
     if (input == (WORD)-1 && is_gamepad)
         input = 0;
 
-
-    TRACE("Found udev device %s (vid %04x, pid %04x, version %u, serial %s)\n",
-          debugstr_a(devnode), vid, pid, version, debugstr_w(serial));
+    TRACE("Found udev device %s (vid %04x, pid %04x, version %04x, input %d, serial %s)\n",
+          debugstr_a(devnode), vid, pid, version, input, debugstr_w(serial));
 
     if (strcmp(subsystem, "hidraw") == 0)
     {
@@ -1186,7 +1139,7 @@ static void try_add_device(struct udev_device *dev)
 #ifdef HAS_PROPER_INPUT_HEADER
         if (strcmp(subsystem, "input") == 0)
             /* FIXME: We should probably move this to IRP_MN_START_DEVICE. */
-            if (!build_report_descriptor((struct wine_input_private*)private, dev))
+            if (build_report_descriptor((struct wine_input_private *)private, dev))
             {
                 ERR("Building report descriptor failed, removing device\n");
                 close(fd);
@@ -1212,10 +1165,9 @@ static void try_remove_device(struct udev_device *dev)
 {
     DEVICE_OBJECT *device = NULL;
 
-    device = bus_find_hid_device(&hidraw_vtbl, dev);
+    device = bus_find_hid_device(hidraw_busidW, dev);
 #ifdef HAS_PROPER_INPUT_HEADER
-    if (device == NULL)
-        device = bus_find_hid_device(&lnxev_vtbl, dev);
+    if (device == NULL) device = bus_find_hid_device(lnxev_busidW, dev);
 #endif
     if (!device) return;
 

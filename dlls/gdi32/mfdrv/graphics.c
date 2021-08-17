@@ -59,16 +59,6 @@ BOOL METADC_Arc( HDC hdc, INT left, INT top, INT right, INT bottom,
 
 
 /***********************************************************************
- *           MFDRV_ArcTo
- */
-BOOL CDECL MFDRV_ArcTo( PHYSDEV dev, INT left, INT top, INT right, INT bottom,
-                        INT xstart, INT ystart, INT xend, INT yend )
-{
-    return FALSE;
-}
-
-
-/***********************************************************************
  *           METADC_Pie
  */
 BOOL METADC_Pie( HDC hdc, INT left, INT top, INT right, INT bottom,
@@ -257,12 +247,11 @@ BOOL METADC_ExtFloodFill( HDC hdc, INT x, INT y, COLORREF color, UINT fill_type 
 
 
 /******************************************************************
- *         MFDRV_CreateRegion
+ *         metadc_create_region
  *
- * For explanation of the format of the record see MF_Play_MetaCreateRegion in
- * objects/metafile.c
+ * For explanation of the format of the record see MF_Play_MetaCreateRegion
  */
-static INT16 MFDRV_CreateRegion(PHYSDEV dev, HRGN hrgn)
+static INT16 metadc_create_region( struct metadc *metadc, HRGN hrgn )
 {
     DWORD len;
     METARECORD *mr;
@@ -340,7 +329,7 @@ static INT16 MFDRV_CreateRegion(PHYSDEV dev, HRGN hrgn)
     mr->rdParm[10] = rgndata->rdh.rcBound.bottom;
     mr->rdFunction = META_CREATEREGION;
     mr->rdSize = Param - (WORD *)mr;
-    ret = MFDRV_WriteRecord( dev, mr, mr->rdSize * 2 );
+    ret = metadc_write_record( metadc, mr, mr->rdSize * 2 );
     HeapFree( GetProcessHeap(), 0, mr );
     HeapFree( GetProcessHeap(), 0, rgndata );
     if(!ret)
@@ -348,7 +337,7 @@ static INT16 MFDRV_CreateRegion(PHYSDEV dev, HRGN hrgn)
         WARN("MFDRV_WriteRecord failed\n");
 	return -1;
     }
-    return MFDRV_AddHandle( dev, hrgn );
+    return metadc_add_handle( metadc, hrgn );
 }
 
 
@@ -357,13 +346,13 @@ static INT16 MFDRV_CreateRegion(PHYSDEV dev, HRGN hrgn)
  */
 BOOL METADC_PaintRgn( HDC hdc, HRGN hrgn )
 {
-    METAFILEDRV_PDEVICE *mf;
+    struct metadc *mf;
     INT16 index;
     if (!(mf = get_metadc_ptr( hdc ))) return FALSE;
-    index = MFDRV_CreateRegion( &mf->dev, hrgn );
+    index = metadc_create_region( mf, hrgn );
     if(index == -1)
         return FALSE;
-    return MFDRV_MetaParam1( &mf->dev, META_PAINTREGION, index );
+    return metadc_param1( hdc, META_PAINTREGION, index );
 }
 
 
@@ -372,13 +361,13 @@ BOOL METADC_PaintRgn( HDC hdc, HRGN hrgn )
  */
 BOOL METADC_InvertRgn( HDC hdc, HRGN hrgn )
 {
-    METAFILEDRV_PDEVICE *mf;
+    struct metadc *mf;
     INT16 index;
     if (!(mf = get_metadc_ptr( hdc ))) return FALSE;
-    index = MFDRV_CreateRegion( &mf->dev, hrgn );
+    index = metadc_create_region( mf, hrgn );
     if(index == -1)
         return FALSE;
-    return MFDRV_MetaParam1( &mf->dev, META_INVERTREGION, index );
+    return metadc_param1( hdc, META_INVERTREGION, index );
 }
 
 
@@ -387,26 +376,18 @@ BOOL METADC_InvertRgn( HDC hdc, HRGN hrgn )
  */
 BOOL METADC_FillRgn( HDC hdc, HRGN hrgn, HBRUSH hbrush )
 {
-    METAFILEDRV_PDEVICE *mf;
+    struct metadc *mf;
     INT16 iRgn, iBrush;
 
     if (!(mf = get_metadc_ptr( hdc ))) return FALSE;
 
-    iRgn = MFDRV_CreateRegion( &mf->dev, hrgn );
+    iRgn = metadc_create_region( mf, hrgn );
     if(iRgn == -1)
         return FALSE;
-    iBrush = MFDRV_CreateBrushIndirect( &mf->dev, hbrush );
+    iBrush = metadc_create_brush( mf, hbrush );
     if(!iBrush)
         return FALSE;
-    return MFDRV_MetaParam2( &mf->dev, META_FILLREGION, iRgn, iBrush );
-}
-
-/**********************************************************************
- *          MFDRV_FillRgn
- */
-BOOL CDECL MFDRV_FillRgn( PHYSDEV dev, HRGN hrgn, HBRUSH hbrush )
-{
-    return TRUE;
+    return metadc_param2( hdc, META_FILLREGION, iRgn, iBrush );
 }
 
 /**********************************************************************
@@ -414,17 +395,17 @@ BOOL CDECL MFDRV_FillRgn( PHYSDEV dev, HRGN hrgn, HBRUSH hbrush )
  */
 BOOL METADC_FrameRgn( HDC hdc, HRGN hrgn, HBRUSH hbrush, INT x, INT y )
 {
-    METAFILEDRV_PDEVICE *mf;
+    struct metadc *mf;
     INT16 iRgn, iBrush;
 
     if (!(mf = get_metadc_ptr( hdc ))) return FALSE;
-    iRgn = MFDRV_CreateRegion( &mf->dev, hrgn );
+    iRgn = metadc_create_region( mf, hrgn );
     if(iRgn == -1)
         return FALSE;
-    iBrush = MFDRV_CreateBrushIndirect( &mf->dev, hbrush );
+    iBrush = metadc_create_brush( mf, hbrush );
     if(!iBrush)
         return FALSE;
-    return MFDRV_MetaParam4( &mf->dev, META_FRAMEREGION, iRgn, iBrush, x, y );
+    return metadc_param4( hdc, META_FRAMEREGION, iRgn, iBrush, x, y );
 }
 
 
@@ -433,38 +414,17 @@ BOOL METADC_FrameRgn( HDC hdc, HRGN hrgn, HBRUSH hbrush, INT x, INT y )
  */
 BOOL METADC_ExtSelectClipRgn( HDC hdc, HRGN hrgn, INT mode )
 {
-    METAFILEDRV_PDEVICE *metadc;
+    struct metadc *metadc;
     INT16 iRgn;
     INT ret;
 
     if (!(metadc = get_metadc_ptr( hdc ))) return FALSE;
     if (mode != RGN_COPY) return ERROR;
     if (!hrgn) return NULLREGION;
-    iRgn = MFDRV_CreateRegion( &metadc->dev, hrgn );
+    iRgn = metadc_create_region( metadc, hrgn );
     if(iRgn == -1) return ERROR;
-    ret = MFDRV_MetaParam1( &metadc->dev, META_SELECTOBJECT, iRgn ) ? NULLREGION : ERROR;
-    MFDRV_MetaParam1( &metadc->dev, META_DELETEOBJECT, iRgn );
-    MFDRV_RemoveHandle( &metadc->dev, iRgn );
+    ret = metadc_param1( hdc, META_SELECTOBJECT, iRgn ) ? NULLREGION : ERROR;
+    metadc_param1( hdc, META_DELETEOBJECT, iRgn );
+    metadc_remove_handle( metadc, iRgn );
     return ret;
-}
-
-
-/**********************************************************************
- *          MFDRV_PolyBezier
- * Since MetaFiles don't record Beziers and they don't even record
- * approximations to them using lines, we need this stub function.
- */
-BOOL CDECL MFDRV_PolyBezier( PHYSDEV dev, const POINT *pts, DWORD count )
-{
-    return FALSE;
-}
-
-/**********************************************************************
- *          MFDRV_PolyBezierTo
- * Since MetaFiles don't record Beziers and they don't even record
- * approximations to them using lines, we need this stub function.
- */
-BOOL CDECL MFDRV_PolyBezierTo( PHYSDEV dev, const POINT *pts, DWORD count )
-{
-    return FALSE;
 }

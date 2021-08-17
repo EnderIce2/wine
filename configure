@@ -1381,6 +1381,7 @@ enable_hal
 enable_hhctrl_ocx
 enable_hid
 enable_hidclass_sys
+enable_hidparse_sys
 enable_hlink
 enable_hnetcfg
 enable_http_sys
@@ -20439,6 +20440,7 @@ wine_fn_config_makefile dlls/d3dx10_42 enable_d3dx10_42
 wine_fn_config_makefile dlls/d3dx10_43 enable_d3dx10_43
 wine_fn_config_makefile dlls/d3dx10_43/tests enable_tests
 wine_fn_config_makefile dlls/d3dx11_42 enable_d3dx11_42
+wine_fn_config_makefile dlls/d3dx11_42/tests enable_tests
 wine_fn_config_makefile dlls/d3dx11_43 enable_d3dx11_43
 wine_fn_config_makefile dlls/d3dx11_43/tests enable_tests
 wine_fn_config_makefile dlls/d3dx9_24 enable_d3dx9_24
@@ -20633,6 +20635,7 @@ wine_fn_config_makefile dlls/hhctrl.ocx enable_hhctrl_ocx
 wine_fn_config_makefile dlls/hid enable_hid
 wine_fn_config_makefile dlls/hid/tests enable_tests
 wine_fn_config_makefile dlls/hidclass.sys enable_hidclass_sys
+wine_fn_config_makefile dlls/hidparse.sys enable_hidparse_sys
 wine_fn_config_makefile dlls/hlink enable_hlink
 wine_fn_config_makefile dlls/hlink/tests enable_tests
 wine_fn_config_makefile dlls/hnetcfg enable_hnetcfg

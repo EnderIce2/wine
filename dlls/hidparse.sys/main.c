@@ -1,7 +1,7 @@
 /*
- * HID descriptor parsing
+ * HID parsing library
  *
- * Copyright (C) 2015 Aric Stewart
+ * Copyright 2021 Rémi Bernon for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,17 +20,27 @@
 
 #include <stdarg.h>
 #include <stdlib.h>
-#include <stdio.h>
-#include "hid.h"
 
-#include "wine/debug.h"
+#include "ntstatus.h"
+#define WIN32_NO_STATUS
+#include "windef.h"
+#include "winbase.h"
+#include "winternl.h"
+#include "winioctl.h"
+
+#include <ddk/wdm.h>
+#include <ddk/hidpddi.h>
+
+#include "wine/hid.h"
 #include "wine/list.h"
+#include "wine/debug.h"
 
-WINE_DEFAULT_DEBUG_CHANNEL(hid);
+WINE_DEFAULT_DEBUG_CHANNEL(hidp);
 
 /* Flags that are defined in the document
    "Device Class Definition for Human Interface Devices" */
-enum {
+enum
+{
     INPUT_DATA_CONST = 0x01, /* Data (0)             | Constant (1)       */
     INPUT_ARRAY_VAR = 0x02,  /* Array (0)            | Variable (1)       */
     INPUT_ABS_REL = 0x04,    /* Absolute (0)         | Relative (1)       */
@@ -42,14 +52,16 @@ enum {
     INPUT_BITFIELD = 0x100   /* Bit Field (0)        | Buffered Bytes (1) */
 };
 
-enum {
+enum
+{
     TAG_TYPE_MAIN = 0x0,
     TAG_TYPE_GLOBAL,
     TAG_TYPE_LOCAL,
     TAG_TYPE_RESERVED,
 };
 
-enum {
+enum
+{
     TAG_MAIN_INPUT = 0x08,
     TAG_MAIN_OUTPUT = 0x09,
     TAG_MAIN_FEATURE = 0x0B,
@@ -57,7 +69,8 @@ enum {
     TAG_MAIN_END_COLLECTION = 0x0C
 };
 
-enum {
+enum
+{
     TAG_GLOBAL_USAGE_PAGE = 0x0,
     TAG_GLOBAL_LOGICAL_MINIMUM,
     TAG_GLOBAL_LOGICAL_MAXIMUM,
@@ -72,7 +85,8 @@ enum {
     TAG_GLOBAL_POP
 };
 
-enum {
+enum
+{
     TAG_LOCAL_USAGE = 0x0,
     TAG_LOCAL_USAGE_MINIMUM,
     TAG_LOCAL_USAGE_MAXIMUM,
@@ -99,7 +113,8 @@ static inline const char *debugstr_hid_value_caps( struct hid_value_caps *caps )
 static void debug_print_preparsed( struct hid_preparsed_data *data )
 {
     unsigned int i, end;
-    if (TRACE_ON(hid))
+
+    if (TRACE_ON( hidp ))
     {
         TRACE( "START PREPARSED Data <<< Usage: %i, UsagePage: %i, "
                "InputReportByteLength: %i, tOutputReportByteLength: %i, "
@@ -314,7 +329,7 @@ static BOOL parse_new_value_caps( struct hid_parser_state *state, HIDP_REPORT_TY
 {
     struct hid_value_caps *value;
     USAGE usage_page = state->items.usage_page;
-    DWORD usages_size = max(1, state->usages_size);
+    DWORD usages_size = max( 1, state->usages_size );
     USHORT *byte_size = state->byte_size[type];
     USHORT *value_idx = state->value_idx[type];
     USHORT *data_idx = state->data_idx[type];
@@ -391,7 +406,7 @@ static void free_parser_state( struct hid_parser_state *state )
     free( state );
 }
 
-static struct hid_preparsed_data *build_preparsed_data( struct hid_parser_state *state )
+static struct hid_preparsed_data *build_preparsed_data( struct hid_parser_state *state, POOL_TYPE pool_type )
 {
     struct hid_preparsed_data *data;
     struct hid_value_caps *caps;
@@ -401,7 +416,8 @@ static struct hid_preparsed_data *build_preparsed_data( struct hid_parser_state 
                state->caps.NumberFeatureValueCaps + state->caps.NumberLinkCollectionNodes;
     size = FIELD_OFFSET( struct hid_preparsed_data, value_caps[caps_len] );
 
-    if (!(data = calloc( 1, size ))) return NULL;
+    if (!(data = ExAllocatePool( pool_type, size ))) return NULL;
+    memset( data, 0, size );
     data->magic = HID_MAGIC;
     data->size = size;
     data->caps = state->caps;
@@ -449,7 +465,7 @@ static struct hid_preparsed_data *build_preparsed_data( struct hid_parser_state 
     return data;
 }
 
-struct hid_preparsed_data *parse_descriptor( BYTE *descriptor, unsigned int length )
+struct hid_preparsed_data *parse_descriptor( BYTE *descriptor, unsigned int length, POOL_TYPE pool_type )
 {
     struct hid_preparsed_data *data = NULL;
     struct hid_parser_state *state;
@@ -458,7 +474,7 @@ struct hid_preparsed_data *parse_descriptor( BYTE *descriptor, unsigned int leng
     BYTE *ptr, *end;
     int i;
 
-    if (TRACE_ON( hid ))
+    if (TRACE_ON( hidp ))
     {
         TRACE( "descriptor %p, length %u:\n", descriptor, length );
         for (i = 0; i < length;)
@@ -469,7 +485,7 @@ struct hid_preparsed_data *parse_descriptor( BYTE *descriptor, unsigned int leng
         }
     }
 
-    if (!(state = calloc( 1, sizeof(*state) ))) return NULL;
+    if (!(state = malloc( sizeof(*state) ))) return NULL;
     init_parser_state( state );
 
     for (ptr = descriptor, end = descriptor + length; ptr != end; ptr += size + 1)
@@ -478,7 +494,7 @@ struct hid_preparsed_data *parse_descriptor( BYTE *descriptor, unsigned int leng
         if (size == 3) size = 4;
         if (ptr + size > end)
         {
-            ERR("Need %d bytes to read item value\n", size);
+            ERR( "Need %d bytes to read item value\n", size );
             goto done;
         }
 
@@ -488,103 +504,103 @@ struct hid_preparsed_data *parse_descriptor( BYTE *descriptor, unsigned int leng
         else if (size == 4) signed_value = (INT32)(value = *(UINT32 *)(ptr + 1));
         else
         {
-            ERR("Unexpected item value size %d.\n", size);
+            ERR( "Unexpected item value size %d.\n", size );
             goto done;
         }
 
         state->items.bit_field = value;
 
-#define SHORT_ITEM(tag,type) (((tag)<<4)|((type)<<2))
-        switch (*ptr & SHORT_ITEM(0xf,0x3))
+#define SHORT_ITEM( tag, type ) (((tag) << 4) | ((type) << 2))
+        switch (*ptr & SHORT_ITEM( 0xf, 0x3 ))
         {
-        case SHORT_ITEM(TAG_MAIN_INPUT, TAG_TYPE_MAIN):
+        case SHORT_ITEM( TAG_MAIN_INPUT, TAG_TYPE_MAIN ):
             if (!parse_new_value_caps( state, HidP_Input )) goto done;
             break;
-        case SHORT_ITEM(TAG_MAIN_OUTPUT, TAG_TYPE_MAIN):
+        case SHORT_ITEM( TAG_MAIN_OUTPUT, TAG_TYPE_MAIN ):
             if (!parse_new_value_caps( state, HidP_Output )) goto done;
             break;
-        case SHORT_ITEM(TAG_MAIN_FEATURE, TAG_TYPE_MAIN):
+        case SHORT_ITEM( TAG_MAIN_FEATURE, TAG_TYPE_MAIN ):
             if (!parse_new_value_caps( state, HidP_Feature )) goto done;
             break;
-        case SHORT_ITEM(TAG_MAIN_COLLECTION, TAG_TYPE_MAIN):
+        case SHORT_ITEM( TAG_MAIN_COLLECTION, TAG_TYPE_MAIN ):
             if (!parse_new_collection( state )) goto done;
             break;
-        case SHORT_ITEM(TAG_MAIN_END_COLLECTION, TAG_TYPE_MAIN):
+        case SHORT_ITEM( TAG_MAIN_END_COLLECTION, TAG_TYPE_MAIN ):
             if (!parse_end_collection( state )) goto done;
             break;
 
-        case SHORT_ITEM(TAG_GLOBAL_USAGE_PAGE, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_USAGE_PAGE, TAG_TYPE_GLOBAL ):
             state->items.usage_page = value;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_LOGICAL_MINIMUM, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_LOGICAL_MINIMUM, TAG_TYPE_GLOBAL ):
             state->items.logical_min = signed_value;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_LOGICAL_MAXIMUM, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_LOGICAL_MAXIMUM, TAG_TYPE_GLOBAL ):
             state->items.logical_max = signed_value;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_PHYSICAL_MINIMUM, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_PHYSICAL_MINIMUM, TAG_TYPE_GLOBAL ):
             state->items.physical_min = signed_value;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_PHYSICAL_MAXIMUM, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_PHYSICAL_MAXIMUM, TAG_TYPE_GLOBAL ):
             state->items.physical_max = signed_value;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_UNIT_EXPONENT, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_UNIT_EXPONENT, TAG_TYPE_GLOBAL ):
             state->items.units_exp = signed_value;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_UNIT, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_UNIT, TAG_TYPE_GLOBAL ):
             state->items.units = signed_value;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_REPORT_SIZE, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_REPORT_SIZE, TAG_TYPE_GLOBAL ):
             state->items.bit_size = value;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_REPORT_ID, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_REPORT_ID, TAG_TYPE_GLOBAL ):
             state->items.report_id = value;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_REPORT_COUNT, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_REPORT_COUNT, TAG_TYPE_GLOBAL ):
             state->items.report_count = value;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_PUSH, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_PUSH, TAG_TYPE_GLOBAL ):
             if (!parse_global_push( state )) goto done;
             break;
-        case SHORT_ITEM(TAG_GLOBAL_POP, TAG_TYPE_GLOBAL):
+        case SHORT_ITEM( TAG_GLOBAL_POP, TAG_TYPE_GLOBAL ):
             if (!parse_global_pop( state )) goto done;
             break;
 
-        case SHORT_ITEM(TAG_LOCAL_USAGE, TAG_TYPE_LOCAL):
+        case SHORT_ITEM( TAG_LOCAL_USAGE, TAG_TYPE_LOCAL ):
             if (!parse_local_usage( state, value >> 16, value & 0xffff )) goto done;
             break;
-        case SHORT_ITEM(TAG_LOCAL_USAGE_MINIMUM, TAG_TYPE_LOCAL):
+        case SHORT_ITEM( TAG_LOCAL_USAGE_MINIMUM, TAG_TYPE_LOCAL ):
             parse_local_usage_min( state, value >> 16, value & 0xffff );
             break;
-        case SHORT_ITEM(TAG_LOCAL_USAGE_MAXIMUM, TAG_TYPE_LOCAL):
+        case SHORT_ITEM( TAG_LOCAL_USAGE_MAXIMUM, TAG_TYPE_LOCAL ):
             parse_local_usage_max( state, value >> 16, value & 0xffff );
             break;
-        case SHORT_ITEM(TAG_LOCAL_DESIGNATOR_INDEX, TAG_TYPE_LOCAL):
+        case SHORT_ITEM( TAG_LOCAL_DESIGNATOR_INDEX, TAG_TYPE_LOCAL ):
             state->items.designator_min = state->items.designator_max = value;
             state->items.is_designator_range = FALSE;
             break;
-        case SHORT_ITEM(TAG_LOCAL_DESIGNATOR_MINIMUM, TAG_TYPE_LOCAL):
+        case SHORT_ITEM( TAG_LOCAL_DESIGNATOR_MINIMUM, TAG_TYPE_LOCAL ):
             state->items.designator_min = value;
             state->items.is_designator_range = TRUE;
             break;
-        case SHORT_ITEM(TAG_LOCAL_DESIGNATOR_MAXIMUM, TAG_TYPE_LOCAL):
+        case SHORT_ITEM( TAG_LOCAL_DESIGNATOR_MAXIMUM, TAG_TYPE_LOCAL ):
             state->items.designator_max = value;
             state->items.is_designator_range = TRUE;
             break;
-        case SHORT_ITEM(TAG_LOCAL_STRING_INDEX, TAG_TYPE_LOCAL):
+        case SHORT_ITEM( TAG_LOCAL_STRING_INDEX, TAG_TYPE_LOCAL ):
             state->items.string_min = state->items.string_max = value;
             state->items.is_string_range = FALSE;
             break;
-        case SHORT_ITEM(TAG_LOCAL_STRING_MINIMUM, TAG_TYPE_LOCAL):
+        case SHORT_ITEM( TAG_LOCAL_STRING_MINIMUM, TAG_TYPE_LOCAL ):
             state->items.string_min = value;
             state->items.is_string_range = TRUE;
             break;
-        case SHORT_ITEM(TAG_LOCAL_STRING_MAXIMUM, TAG_TYPE_LOCAL):
+        case SHORT_ITEM( TAG_LOCAL_STRING_MAXIMUM, TAG_TYPE_LOCAL ):
             state->items.string_max = value;
             state->items.is_string_range = TRUE;
             break;
-        case SHORT_ITEM(TAG_LOCAL_DELIMITER, TAG_TYPE_LOCAL):
-            FIXME("delimiter %d not implemented!\n", value);
+        case SHORT_ITEM( TAG_LOCAL_DELIMITER, TAG_TYPE_LOCAL ):
+            FIXME( "delimiter %d not implemented!\n", value );
             goto done;
 
         default:
@@ -594,9 +610,97 @@ struct hid_preparsed_data *parse_descriptor( BYTE *descriptor, unsigned int leng
 #undef SHORT_ITEM
     }
 
-    if ((data = build_preparsed_data( state ))) debug_print_preparsed( data );
+    if ((data = build_preparsed_data( state, pool_type ))) debug_print_preparsed( data );
 
 done:
     free_parser_state( state );
     return data;
+}
+
+NTSTATUS WINAPI HidP_GetCollectionDescription( PHIDP_REPORT_DESCRIPTOR report_desc, ULONG report_desc_len,
+                                               POOL_TYPE pool_type, HIDP_DEVICE_DESC *device_desc )
+{
+    ULONG i, len, report_count = 0, input_len[256] = {0}, output_len[256] = {0}, feature_len[256] = {0};
+    struct hid_value_caps *caps, *caps_end;
+    struct hid_preparsed_data *preparsed;
+
+    TRACE( "report_desc %p, report_desc_len %u, pool_type %u, device_desc %p.\n",
+            report_desc, report_desc_len, pool_type, device_desc );
+
+    memset( device_desc, 0, sizeof(*device_desc) );
+
+    if (!(preparsed = parse_descriptor( report_desc, report_desc_len, pool_type )))
+        return HIDP_STATUS_INTERNAL_ERROR;
+
+    if (!(device_desc->CollectionDesc = ExAllocatePool( pool_type, sizeof(*device_desc->CollectionDesc) )))
+    {
+        free( preparsed );
+        return STATUS_NO_MEMORY;
+    }
+
+    device_desc->CollectionDescLength = 1;
+    device_desc->CollectionDesc[0].UsagePage = preparsed->caps.UsagePage;
+    device_desc->CollectionDesc[0].Usage = preparsed->caps.Usage;
+    device_desc->CollectionDesc[0].CollectionNumber = 1;
+    device_desc->CollectionDesc[0].InputLength = preparsed->caps.InputReportByteLength;
+    device_desc->CollectionDesc[0].OutputLength = preparsed->caps.OutputReportByteLength;
+    device_desc->CollectionDesc[0].FeatureLength = preparsed->caps.FeatureReportByteLength;
+    device_desc->CollectionDesc[0].PreparsedDataLength = preparsed->size;
+    device_desc->CollectionDesc[0].PreparsedData = (PHIDP_PREPARSED_DATA)preparsed;
+
+    caps = HID_INPUT_VALUE_CAPS( preparsed );
+    caps_end = caps + preparsed->value_caps_count[HidP_Input];
+    for (; caps != caps_end; ++caps)
+    {
+        len = caps->start_bit + caps->bit_size * caps->report_count;
+        if (!input_len[caps->report_id]) report_count++;
+        input_len[caps->report_id] = max(input_len[caps->report_id], len);
+    }
+
+    caps = HID_OUTPUT_VALUE_CAPS( preparsed );
+    caps_end = caps + preparsed->value_caps_count[HidP_Output];
+    for (; caps != caps_end; ++caps)
+    {
+        len = caps->start_bit + caps->bit_size * caps->report_count;
+        if (!input_len[caps->report_id] && !output_len[caps->report_id]) report_count++;
+        output_len[caps->report_id] = max(output_len[caps->report_id], len);
+    }
+
+    caps = HID_FEATURE_VALUE_CAPS( preparsed );
+    caps_end = caps + preparsed->value_caps_count[HidP_Feature];
+    for (; caps != caps_end; ++caps)
+    {
+        len = caps->start_bit + caps->bit_size * caps->report_count;
+        if (!input_len[caps->report_id] && !output_len[caps->report_id] && !feature_len[caps->report_id]) report_count++;
+        feature_len[caps->report_id] = max(feature_len[caps->report_id], len);
+    }
+
+    if (!(device_desc->ReportIDs = ExAllocatePool( pool_type, sizeof(*device_desc->ReportIDs) * report_count )))
+    {
+        free( preparsed );
+        ExFreePool( device_desc->CollectionDesc );
+        return STATUS_NO_MEMORY;
+    }
+
+    for (i = 0, report_count = 0; i < 256; ++i)
+    {
+        if (!input_len[i] && !output_len[i] && !feature_len[i]) continue;
+        device_desc->ReportIDs[report_count].ReportID = i;
+        device_desc->ReportIDs[report_count].CollectionNumber = 1;
+        device_desc->ReportIDs[report_count].InputLength = (input_len[i] + 7) / 8;
+        device_desc->ReportIDs[report_count].OutputLength = (output_len[i] + 7) / 8;
+        device_desc->ReportIDs[report_count].FeatureLength = (feature_len[i] + 7) / 8;
+        report_count++;
+    }
+    device_desc->ReportIDsLength = report_count;
+
+    return HIDP_STATUS_SUCCESS;
+}
+
+void WINAPI HidP_FreeCollectionDescription( HIDP_DEVICE_DESC *device_desc )
+{
+    TRACE( "device_desc %p.\n", device_desc );
+
+    ExFreePool( device_desc->CollectionDesc );
+    ExFreePool( device_desc->ReportIDs );
 }

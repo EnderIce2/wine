@@ -31,9 +31,9 @@
 
 /* Metafile driver physical DC */
 
-typedef struct
+struct metadc
 {
-    struct gdi_physdev dev;
+    HDC        hdc;
     METAHEADER  *mh;           /* Pointer to metafile header */
     UINT       handles_size, cur_handles;
     HGDIOBJ   *handles;
@@ -41,28 +41,16 @@ typedef struct
     HPEN       pen;
     HBRUSH     brush;
     HFONT      font;
-} METAFILEDRV_PDEVICE;
+};
 
 #define HANDLE_LIST_INC 20
 
 
-extern BOOL MFDRV_MetaParam0(PHYSDEV dev, short func) DECLSPEC_HIDDEN;
-extern BOOL MFDRV_MetaParam1(PHYSDEV dev, short func, short param1) DECLSPEC_HIDDEN;
-extern BOOL MFDRV_MetaParam2(PHYSDEV dev, short func, short param1, short param2) DECLSPEC_HIDDEN;
-extern BOOL MFDRV_MetaParam4(PHYSDEV dev, short func, short param1, short param2,
-                             short param3, short param4) DECLSPEC_HIDDEN;
-extern BOOL MFDRV_MetaParam6(PHYSDEV dev, short func, short param1, short param2,
-                             short param3, short param4, short param5,
-                             short param6) DECLSPEC_HIDDEN;
-extern BOOL MFDRV_MetaParam8(PHYSDEV dev, short func, short param1, short param2,
-                             short param3, short param4, short param5,
-                             short param6, short param7, short param8) DECLSPEC_HIDDEN;
-extern BOOL MFDRV_WriteRecord(PHYSDEV dev, METARECORD *mr, DWORD rlen) DECLSPEC_HIDDEN;
-extern UINT MFDRV_AddHandle( PHYSDEV dev, HGDIOBJ obj ) DECLSPEC_HIDDEN;
-extern BOOL MFDRV_RemoveHandle( PHYSDEV dev, UINT index ) DECLSPEC_HIDDEN;
-extern INT16 MFDRV_CreateBrushIndirect( PHYSDEV dev, HBRUSH hBrush ) DECLSPEC_HIDDEN;
+extern UINT metadc_add_handle( struct metadc *metadc, HGDIOBJ obj ) DECLSPEC_HIDDEN;
+extern BOOL metadc_remove_handle( struct metadc *metadc, UINT index ) DECLSPEC_HIDDEN;
+extern INT16 metadc_create_brush( struct metadc *metadc, HBRUSH brush ) DECLSPEC_HIDDEN;
 
-extern METAFILEDRV_PDEVICE *get_metadc_ptr( HDC hdc ) DECLSPEC_HIDDEN;
+extern struct metadc *get_metadc_ptr( HDC hdc ) DECLSPEC_HIDDEN;
 extern BOOL metadc_param0( HDC hdc, short func ) DECLSPEC_HIDDEN;
 extern BOOL metadc_param1( HDC hdc, short func, short param ) DECLSPEC_HIDDEN;
 extern BOOL metadc_param2( HDC hdc, short func, short param1, short param2 ) DECLSPEC_HIDDEN;
@@ -76,29 +64,6 @@ extern BOOL metadc_param8( HDC hdc, short func, short param1, short param2,
                            short param3, short param4, short param5, short param6,
                            short param7, short param8 ) DECLSPEC_HIDDEN;
 extern BOOL metadc_record( HDC hdc, METARECORD *mr, DWORD rlen ) DECLSPEC_HIDDEN;
-
-/* Metafile driver functions */
-
-extern BOOL CDECL MFDRV_AbortPath( PHYSDEV dev ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_ArcTo( PHYSDEV dev, INT left, INT top, INT right, INT bottom,
-                               INT xstart, INT ystart, INT xend, INT yend ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_BeginPath( PHYSDEV dev ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_CloseFigure( PHYSDEV dev ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_EndPath( PHYSDEV dev ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_FillPath( PHYSDEV dev ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_FillRgn( PHYSDEV dev, HRGN hrgn, HBRUSH hbrush ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_FlattenPath( PHYSDEV dev ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_PolyBezier( PHYSDEV dev, const POINT* pt, DWORD count ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_PolyBezierTo( PHYSDEV dev, const POINT* pt, DWORD count ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_RestoreDC( PHYSDEV dev, INT level ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_ScaleWindowExtEx( PHYSDEV dev, INT xNum, INT xDenom, INT yNum, INT yDenom, SIZE *size ) DECLSPEC_HIDDEN;
-extern BOOL  CDECL MFDRV_SelectClipPath( PHYSDEV dev, INT iMode ) DECLSPEC_HIDDEN;
-extern COLORREF CDECL MFDRV_SetBkColor( PHYSDEV dev, COLORREF color ) DECLSPEC_HIDDEN;
-extern COLORREF CDECL MFDRV_SetDCBrushColor( PHYSDEV dev, COLORREF color ) DECLSPEC_HIDDEN;
-extern COLORREF CDECL MFDRV_SetDCPenColor( PHYSDEV dev, COLORREF color ) DECLSPEC_HIDDEN;
-extern COLORREF  CDECL MFDRV_SetTextColor( PHYSDEV dev, COLORREF color ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_StrokeAndFillPath( PHYSDEV dev ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_StrokePath( PHYSDEV dev ) DECLSPEC_HIDDEN;
-extern BOOL CDECL MFDRV_WidenPath( PHYSDEV dev ) DECLSPEC_HIDDEN;
+extern BOOL metadc_write_record( struct metadc *metadc, METARECORD *mr, DWORD rlen ) DECLSPEC_HIDDEN;
 
 #endif  /* __WINE_METAFILEDRV_H */

@@ -40,7 +40,6 @@ typedef struct
     HANDLE     hFile;              /* Handle for disk based MetaFile */
     HBRUSH     dc_brush;
     HPEN       dc_pen;
-    INT        restoring;          /* RestoreDC counter */
     BOOL       path;
     INT        dev_caps[COLORMGMTCAPS + 1];
 } EMFDRV_PDEVICE;
@@ -74,7 +73,6 @@ extern BOOL     CDECL EMFDRV_FillPath( PHYSDEV dev ) DECLSPEC_HIDDEN;
 extern BOOL     CDECL EMFDRV_FillRgn( PHYSDEV dev, HRGN hrgn, HBRUSH hbrush ) DECLSPEC_HIDDEN;
 extern BOOL     CDECL EMFDRV_FlattenPath( PHYSDEV dev ) DECLSPEC_HIDDEN;
 extern BOOL     CDECL EMFDRV_FrameRgn( PHYSDEV dev, HRGN hrgn, HBRUSH hbrush, INT width, INT height ) DECLSPEC_HIDDEN;
-extern BOOL     CDECL EMFDRV_GdiComment( PHYSDEV dev, UINT bytes, const BYTE *buffer ) DECLSPEC_HIDDEN;
 extern INT      CDECL EMFDRV_GetDeviceCaps( PHYSDEV dev, INT cap ) DECLSPEC_HIDDEN;
 extern BOOL     CDECL EMFDRV_GradientFill( PHYSDEV dev, TRIVERTEX *vert_array, ULONG nvert,
                                            void *grad_array, ULONG ngrad, ULONG mode ) DECLSPEC_HIDDEN;
@@ -90,7 +88,6 @@ extern BOOL     CDECL EMFDRV_PolyPolygon( PHYSDEV dev, const POINT* pt, const IN
 extern BOOL     CDECL EMFDRV_PolyPolyline( PHYSDEV dev, const POINT* pt, const DWORD* counts, DWORD polys) DECLSPEC_HIDDEN;
 extern BOOL     CDECL EMFDRV_PolylineTo( PHYSDEV dev, const POINT* pt,INT count) DECLSPEC_HIDDEN;
 extern BOOL     CDECL EMFDRV_Rectangle( PHYSDEV dev, INT left, INT top, INT right, INT bottom) DECLSPEC_HIDDEN;
-extern BOOL     CDECL EMFDRV_RestoreDC( PHYSDEV dev, INT level ) DECLSPEC_HIDDEN;
 extern BOOL     CDECL EMFDRV_RoundRect( PHYSDEV dev, INT left, INT top, INT right, INT bottom,
                                         INT ell_width, INT ell_height ) DECLSPEC_HIDDEN;
 extern BOOL     CDECL EMFDRV_ScaleWindowExtEx( PHYSDEV dev, INT xNum, INT xDenom,
@@ -98,14 +95,12 @@ extern BOOL     CDECL EMFDRV_ScaleWindowExtEx( PHYSDEV dev, INT xNum, INT xDenom
 extern HBITMAP  CDECL EMFDRV_SelectBitmap( PHYSDEV dev, HBITMAP handle ) DECLSPEC_HIDDEN;
 extern BOOL     CDECL EMFDRV_SelectClipPath( PHYSDEV dev, INT iMode ) DECLSPEC_HIDDEN;
 extern HFONT    CDECL EMFDRV_SelectFont( PHYSDEV dev, HFONT handle, UINT *aa_flags ) DECLSPEC_HIDDEN;
-extern COLORREF CDECL EMFDRV_SetBkColor( PHYSDEV dev, COLORREF color ) DECLSPEC_HIDDEN;
 extern COLORREF CDECL EMFDRV_SetDCBrushColor( PHYSDEV dev, COLORREF color ) DECLSPEC_HIDDEN;
 extern COLORREF CDECL EMFDRV_SetDCPenColor( PHYSDEV dev, COLORREF color ) DECLSPEC_HIDDEN;
 extern INT      CDECL EMFDRV_SetDIBitsToDevice( PHYSDEV dev, INT xDest, INT yDest, DWORD cx, DWORD cy, INT xSrc,
                                                 INT ySrc, UINT startscan, UINT lines, LPCVOID bits,
                                                 BITMAPINFO *info, UINT coloruse ) DECLSPEC_HIDDEN;
 extern COLORREF CDECL EMFDRV_SetPixel( PHYSDEV dev, INT x, INT y, COLORREF color ) DECLSPEC_HIDDEN;
-extern COLORREF CDECL EMFDRV_SetTextColor( PHYSDEV dev, COLORREF color ) DECLSPEC_HIDDEN;
 extern INT      CDECL EMFDRV_StretchDIBits( PHYSDEV dev, INT xDst, INT yDst, INT widthDst, INT heightDst,
                                             INT xSrc, INT ySrc, INT widthSrc, INT heightSrc,
                                             const void *bits, BITMAPINFO *info, UINT wUsage, DWORD dwRop ) DECLSPEC_HIDDEN;

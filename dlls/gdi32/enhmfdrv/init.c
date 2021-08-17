@@ -66,7 +66,6 @@ static const struct gdi_dc_funcs emfdrv_driver =
     EMFDRV_FlattenPath,              /* pFlattenPath */
     NULL,                            /* pFontIsLinked */
     EMFDRV_FrameRgn,                 /* pFrameRgn */
-    EMFDRV_GdiComment,               /* pGdiComment */
     NULL,                            /* pGetBoundsRect */
     NULL,                            /* pGetCharABCWidths */
     NULL,                            /* pGetCharABCWidthsI */
@@ -109,14 +108,13 @@ static const struct gdi_dc_funcs emfdrv_driver =
     NULL,                            /* pRealizePalette */
     EMFDRV_Rectangle,                /* pRectangle */
     NULL,                            /* pResetDC */
-    EMFDRV_RestoreDC,                /* pRestoreDC */
     EMFDRV_RoundRect,                /* pRoundRect */
     EMFDRV_SelectBitmap,             /* pSelectBitmap */
     NULL,                            /* pSelectBrush */
     EMFDRV_SelectClipPath,           /* pSelectClipPath */
     EMFDRV_SelectFont,               /* pSelectFont */
     NULL,                            /* pSelectPen */
-    EMFDRV_SetBkColor,               /* pSetBkColor */
+    NULL,                            /* pSetBkColor */
     NULL,                            /* pSetBoundsRect */
     EMFDRV_SetDCBrushColor,          /* pSetDCBrushColor*/
     EMFDRV_SetDCPenColor,            /* pSetDCPenColor*/
@@ -124,7 +122,7 @@ static const struct gdi_dc_funcs emfdrv_driver =
     NULL,                            /* pSetDeviceClipping */
     NULL,                            /* pSetDeviceGammaRamp */
     EMFDRV_SetPixel,                 /* pSetPixel */
-    EMFDRV_SetTextColor,             /* pSetTextColor */
+    NULL,                            /* pSetTextColor */
     NULL,                            /* pStartDoc */
     NULL,                            /* pStartPage */
     NULL,                            /* pStretchBlt */
@@ -335,7 +333,6 @@ HDC WINAPI CreateEnhMetaFileW(
     physDev->hFile = 0;
     physDev->dc_brush = 0;
     physDev->dc_pen = 0;
-    physDev->restoring = 0;
     physDev->path = FALSE;
 
     if (hdc)  /* if no ref, use current display */
@@ -439,8 +436,8 @@ HENHMETAFILE WINAPI CloseEnhMetaFile(HDC hdc) /* [in] metafile DC */
     }
     physDev = get_emf_physdev( find_dc_driver( dc, &emfdrv_driver ));
 
-    if(dc->saveLevel)
-        RestoreDC(hdc, 1);
+    if (dc->attr->save_level)
+        RestoreDC( hdc, 1 );
 
     if (physDev->dc_brush) DeleteObject( physDev->dc_brush );
     if (physDev->dc_pen) DeleteObject( physDev->dc_pen );

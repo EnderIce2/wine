@@ -126,6 +126,19 @@ INT WINAPI SaveDC( HDC hdc )
 }
 
 /***********************************************************************
+ *           RestoreDC    (GDI32.@)
+ */
+BOOL WINAPI RestoreDC( HDC hdc, INT level )
+{
+    DC_ATTR *dc_attr;
+
+    if (is_meta_dc( hdc )) return METADC_RestoreDC( hdc, level );
+    if (!(dc_attr = get_dc_attr( hdc ))) return FALSE;
+    if (dc_attr->emf && !EMFDC_RestoreDC( dc_attr, level )) return FALSE;
+    return NtGdiRestoreDC( hdc, level );
+}
+
+/***********************************************************************
  *           GetDeviceCaps    (GDI32.@)
  */
 INT WINAPI GetDeviceCaps( HDC hdc, INT cap )
@@ -280,6 +293,20 @@ COLORREF WINAPI GetBkColor( HDC hdc )
 }
 
 /***********************************************************************
+ *           SetBkColor    (GDI32.@)
+ */
+COLORREF WINAPI SetBkColor( HDC hdc, COLORREF color )
+{
+    DC_ATTR *dc_attr;
+    COLORREF ret;
+
+    if (is_meta_dc( hdc )) return METADC_SetBkColor( hdc, color );
+    if (!(dc_attr = get_dc_attr( hdc ))) return CLR_INVALID;
+    if (dc_attr->emf && !EMFDC_SetBkColor( dc_attr, color )) return CLR_INVALID;
+    return NtGdiGetAndSetDCDword( hdc, NtGdiSetBkColor, color, &ret ) ? ret : CLR_INVALID;
+}
+
+/***********************************************************************
  *           GetDCBrushColor  (GDI32.@)
  */
 COLORREF WINAPI GetDCBrushColor( HDC hdc )
@@ -304,6 +331,20 @@ COLORREF WINAPI GetTextColor( HDC hdc )
 {
     DC_ATTR *dc_attr = get_dc_attr( hdc );
     return dc_attr ? dc_attr->text_color : 0;
+}
+
+/***********************************************************************
+ *           SetTextColor    (GDI32.@)
+ */
+COLORREF WINAPI SetTextColor( HDC hdc, COLORREF color )
+{
+    DC_ATTR *dc_attr;
+    COLORREF ret;
+
+    if (is_meta_dc( hdc )) return METADC_SetTextColor( hdc, color );
+    if (!(dc_attr = get_dc_attr( hdc ))) return CLR_INVALID;
+    if (dc_attr->emf && !EMFDC_SetTextColor( dc_attr, color )) return CLR_INVALID;
+    return NtGdiGetAndSetDCDword( hdc, NtGdiSetTextColor, color, &ret ) ? ret : CLR_INVALID;
 }
 
 /***********************************************************************

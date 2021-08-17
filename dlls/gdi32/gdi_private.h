@@ -52,6 +52,7 @@ extern BOOL METADC_BitBlt( HDC hdc_dst, INT x_dst, INT y_dst, INT width, INT hei
                            HDC hdc_src, INT x_src, INT y_src, DWORD rop );
 extern BOOL METADC_Chord( HDC hdc, INT left, INT top, INT right, INT bottom, INT xstart,
                           INT ystart, INT xend, INT yend ) DECLSPEC_HIDDEN;
+extern BOOL METADC_DeleteDC( HDC hdc );
 extern BOOL METADC_Ellipse( HDC hdc, INT left, INT top, INT right, INT bottom ) DECLSPEC_HIDDEN;
 extern BOOL METADC_ExcludeClipRect( HDC hdc, INT left, INT top, INT right,
                                     INT bottom ) DECLSPEC_HIDDEN;
@@ -83,6 +84,7 @@ extern BOOL METADC_Polygon( HDC hdc, const POINT *points, INT count ) DECLSPEC_H
 extern BOOL METADC_Polyline( HDC hdc, const POINT *points,INT count) DECLSPEC_HIDDEN;
 extern BOOL METADC_RealizePalette( HDC hdc ) DECLSPEC_HIDDEN;
 extern BOOL METADC_Rectangle( HDC hdc, INT left, INT top, INT right, INT bottom) DECLSPEC_HIDDEN;
+extern BOOL METADC_RestoreDC( HDC hdc, INT level ) DECLSPEC_HIDDEN;
 extern BOOL METADC_RoundRect( HDC hdc, INT left, INT top, INT right, INT bottom,
                               INT ell_width, INT ell_height ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SaveDC( HDC hdc ) DECLSPEC_HIDDEN;
@@ -92,6 +94,7 @@ extern BOOL METADC_ScaleWindowExtEx( HDC hdc, INT x_num, INT x_denom, INT y_num,
                                      INT y_denom ) DECLSPEC_HIDDEN;
 extern HGDIOBJ METADC_SelectObject( HDC hdc, HGDIOBJ obj ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SelectPalette( HDC hdc, HPALETTE palette ) DECLSPEC_HIDDEN;
+extern BOOL METADC_SetBkColor( HDC hdc, COLORREF color ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetBkMode( HDC hdc, INT mode ) DECLSPEC_HIDDEN;
 extern INT  METADC_SetDIBitsToDevice( HDC hdc, INT x_dest, INT y_dest, DWORD width, DWORD height,
                                       INT x_src, INT y_src, UINT startscan, UINT lines,
@@ -107,6 +110,7 @@ extern BOOL METADC_SetRelAbs( HDC hdc, INT mode ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetROP2( HDC hdc, INT rop ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetStretchBltMode( HDC hdc, INT mode ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetTextAlign( HDC hdc, UINT align ) DECLSPEC_HIDDEN;
+extern BOOL METADC_SetTextColor( HDC hdc, COLORREF color ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetTextJustification( HDC hdc, INT extra, INT breaks ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetViewportExtEx( HDC hdc, INT x, INT y ) DECLSPEC_HIDDEN;
 extern BOOL METADC_SetViewportOrgEx( HDC hdc, INT x, INT y ) DECLSPEC_HIDDEN;
@@ -171,6 +175,7 @@ extern BOOL EMFDC_Polyline( DC_ATTR *dc_attr, const POINT *points, INT count) DE
 extern BOOL EMFDC_PolylineTo( DC_ATTR *dc_attr, const POINT *points, INT count ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_Rectangle( DC_ATTR *dc_attr, INT left, INT top, INT right,
                              INT bottom) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_RestoreDC( DC_ATTR *dc_attr, INT level ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_RoundRect( DC_ATTR *dc_attr, INT left, INT top, INT right, INT bottom,
                              INT ell_width, INT ell_height ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SaveDC( DC_ATTR *dc_attr ) DECLSPEC_HIDDEN;
@@ -181,6 +186,7 @@ extern BOOL EMFDC_ScaleWindowExtEx( DC_ATTR *dc_attr, INT x_num, INT x_denom, IN
 extern BOOL EMFDC_SelectObject( DC_ATTR *dc_attr, HGDIOBJ obj ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SelectPalette( DC_ATTR *dc_attr, HPALETTE palette ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetArcDirection( DC_ATTR *dc_attr, INT dir ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_SetBkColor( DC_ATTR *dc_attr, COLORREF color ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetBkMode( DC_ATTR *dc_attr, INT mode ) DECLSPEC_HIDDEN;
 extern INT  EMFDC_SetDIBitsToDevice( DC_ATTR *dc_attr, INT x_dest, INT y_dest, DWORD width,
                                      DWORD height, INT x_src, INT y_src, UINT startscan,
@@ -194,6 +200,7 @@ extern BOOL EMFDC_SetPolyFillMode( DC_ATTR *dc_attr, INT mode ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetROP2( DC_ATTR *dc_attr, INT rop ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetStretchBltMode( DC_ATTR *dc_attr, INT mode ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetTextAlign( DC_ATTR *dc_attr, UINT align ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_SetTextColor( DC_ATTR *dc_attr, COLORREF color ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetTextJustification( DC_ATTR *dc_attr, INT extra, INT breaks ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetViewportExtEx( DC_ATTR *dc_attr, INT x, INT y ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetViewportOrgEx( DC_ATTR *dc_attr, INT x, INT y ) DECLSPEC_HIDDEN;
