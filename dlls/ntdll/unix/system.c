@@ -2527,6 +2527,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
     case SystemFileCacheInformation:  /* 21 */
     {
         SYSTEM_CACHE_INFORMATION sci = { 0 };
+        static BOOL once;
 
         len = sizeof(sci);
         if (size >= len)
@@ -2535,7 +2536,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             else memcpy( info, &sci, len);
         }
         else ret = STATUS_INFO_LENGTH_MISMATCH;
-        FIXME("info_class SYSTEM_CACHE_INFORMATION\n");
+        if (!once++) FIXME("info_class SYSTEM_CACHE_INFORMATION\n");
         break;
     }
 
