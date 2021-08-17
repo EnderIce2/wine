@@ -44,6 +44,7 @@ WINE_DECLARE_DEBUG_CHANNEL(relay);
 WINE_DECLARE_DEBUG_CHANNEL(snoop);
 WINE_DECLARE_DEBUG_CHANNEL(loaddll);
 WINE_DECLARE_DEBUG_CHANNEL(imports);
+WINE_DECLARE_DEBUG_CHANNEL(tuicadiag);
 
 #ifdef _WIN64
 #define DEFAULT_SECURITY_COOKIE_64  (((ULONGLONG)0x00002b99 << 32) | 0x2ddfa232)
@@ -3398,6 +3399,7 @@ void WINAPI LdrShutdownProcess(void)
     process_detach();
 }
 
+extern const char * CDECL wine_get_version(void);
 
 /******************************************************************
  *		RtlExitUserProcess (NTDLL.@)
@@ -3797,6 +3799,9 @@ static void release_address_space(void)
  */
 void WINAPI LdrInitializeThunk( CONTEXT *context, ULONG_PTR unknown2, ULONG_PTR unknown3, ULONG_PTR unknown4 )
 {
+    OBJECT_ATTRIBUTES tuica_event_attr;
+    UNICODE_STRING tuica_event_string;
+    HANDLE tuica_event;
     static int attach_done;
     int i;
     NTSTATUS status;
@@ -3882,6 +3887,16 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, ULONG_PTR unknown2, ULONG_PTR 
 #ifdef _WIN64
     if (NtCurrentTeb()->WowTebOffset) init_wow64( context );
 #endif
+
+    RtlInitUnicodeString( &tuica_event_string, L"\\__wine_tuica_warn_event" );
+    InitializeObjectAttributes( &tuica_event_attr, &tuica_event_string, OBJ_OPENIF, NULL, NULL );
+    if (NtCreateEvent( &tuica_event, EVENT_ALL_ACCESS, &tuica_event_attr, NotificationEvent, FALSE ) == STATUS_SUCCESS)
+    {
+        FIXME_(tuicadiag)("this is a modified version of wine %s! if you find any problems don't report on winehq forums, instead report it here https://github.com/EnderIce2/wine\n", wine_get_version());
+        FIXME_(tuicadiag)("Please mention your exact version and commit when filing bug reports on https://github.com/EnderIce2/wine/issues\n");
+    }
+    else
+        WARN_(tuicadiag)("this is a modified version of wine %s! if you find any problems don't report on winehq forums, instead report it here https://github.com/EnderIce2/wine\n", wine_get_version());
 
     RtlAcquirePebLock();
     InsertHeadList( &tls_links, &NtCurrentTeb()->TlsLinks );
