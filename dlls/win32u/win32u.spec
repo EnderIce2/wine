@@ -930,7 +930,7 @@
 @ stub NtUserGetGestureConfig
 @ stub NtUserGetGestureExtArgs
 @ stub NtUserGetGestureInfo
-@ stub NtUserGetGuiResources
+@ stdcall NtUserGetGuiResources(long long)
 @ stub NtUserGetHDevName
 @ stub NtUserGetHimetricScaleFactorFromPixelLocation
 @ stub NtUserGetIconInfo

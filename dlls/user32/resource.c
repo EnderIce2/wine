@@ -26,6 +26,7 @@
 #include "winerror.h"
 #include "winternl.h"
 #include "winnls.h"
+#include "ntuser.h"
 #include "wine/debug.h"
 #include "user_private.h"
 
@@ -322,13 +323,5 @@ INT WINAPI DECLSPEC_HOTPATCH LoadStringA( HINSTANCE instance, UINT resource_id, 
  */
 DWORD WINAPI GetGuiResources( HANDLE hProcess, DWORD uiFlags )
 {
-    static BOOL warn = TRUE;
-
-    if (warn) {
-        FIXME("(%p,%x): stub\n",hProcess,uiFlags);
-       warn = FALSE;
-    }
-
-    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
-    return 0;
+    return NtUserGetGuiResources(hProcess, uiFlags);
 }

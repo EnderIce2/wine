@@ -2467,6 +2467,25 @@ typedef struct _SYSTEM_CACHE_INFORMATION {
     ULONG Flags;
 } SYSTEM_CACHE_INFORMATION, *PSYSTEM_CACHE_INFORMATION;
 
+typedef struct _SYSTEM_POOLTAG {
+    union
+    {
+        UCHAR Tag[4];
+        ULONG TagUlong;
+    };
+    ULONG PagedAllocs;
+    ULONG PagedFrees;
+    SIZE_T PagedUsed;
+    ULONG NonPagedAllocs;
+    ULONG NonPagedFrees;
+    SIZE_T NonPagedUsed;
+} SYSTEM_POOLTAG, *PSYSTEM_POOLTAG;
+  
+typedef struct _SYSTEM_POOLTAG_INFORMATION {
+    ULONG Count;
+    SYSTEM_POOLTAG TagInfo[1];
+} SYSTEM_POOLTAG_INFORMATION, *PSYSTEM_POOLTAG_INFORMATION;
+
 /* System Information Class 0x17 */
 
 typedef struct _SYSTEM_INTERRUPT_INFORMATION {

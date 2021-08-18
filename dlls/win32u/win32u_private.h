@@ -1,0 +1,18 @@
+#define GR_GDIOBJECTS 0
+#define GR_GDIOBJECTS_PEAK 2
+#define GR_USEROBJECTS 1
+#define GR_USEROBJECTS_PEAK 4
+
+typedef struct _PROCESSINFO
+{
+    LONG          GDIHandleCount;
+    LONG          UserHandleCount;
+} PROCESSINFO, *PPROCESSINFO;
+
+typedef struct _PRIVATE_EPROCESS
+{
+    DISPATCHER_HEADER header;
+    PROCESS_BASIC_INFORMATION info;
+    BOOL wow64;
+    PPROCESSINFO W32Process;
+} PRIVATE_EPROCESS;

@@ -13,6 +13,12 @@
         "fstream": "c",
         "winbase.h": "c",
         "heap.h": "c",
-        "*.rh": "c"
+        "*.rh": "c",
+        "windef.h": "c",
+        "winnt.h": "c",
+        "istream": "c",
+        "ostream": "c",
+        "wdm.h": "c",
+        "win32u_private.h": "c"
     }
 }

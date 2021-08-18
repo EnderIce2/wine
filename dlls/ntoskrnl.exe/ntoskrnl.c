@@ -2312,6 +2312,16 @@ PEPROCESS WINAPI IoGetCurrentProcess(void)
 }
 
 /***********************************************************************
+ *           ExGetPreviousMode   (NTOSKRNL.EXE.@)
+ */
+ULONG WINAPI ExGetPreviousMode(void)
+{
+    static BOOL once;
+    if (!once++) FIXME("() stub\n");
+    return KernelMode;
+}
+
+/***********************************************************************
  *           PsLookupProcessByProcessId  (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI PsLookupProcessByProcessId( HANDLE processid, PEPROCESS *process )

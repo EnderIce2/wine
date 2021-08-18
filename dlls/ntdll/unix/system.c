@@ -2540,6 +2540,19 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         break;
     }
 
+    case SystemPoolTagInformation: /* 22 */
+    {
+        static BOOL once;
+        if (size < sizeof(SYSTEM_POOLTAG_INFORMATION))
+        {
+            ret = STATUS_INFO_LENGTH_MISMATCH;
+        }
+        //else
+        //ret = ExGetPoolTagInfo(buffer, size, sizetotal);
+        if (!once++) FIXME("info_class SYSTEM_POOLTAG_INFORMATION\n");
+        break;
+    }
+
     case SystemInterruptInformation: /* 23 */
     {
         len = peb->NumberOfProcessors * sizeof(SYSTEM_INTERRUPT_INFORMATION);
