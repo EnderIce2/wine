@@ -27,6 +27,7 @@
 #include "wine/unixlib.h"
 #include "wine/server.h"
 #include "wine/list.h"
+#include "ddk/wdm.h"
 
 struct msghdr;
 
@@ -90,6 +91,43 @@ static const LONG teb_offset = 0x2000;
 #define FILE_WRITE_TO_END_OF_FILE      ((LONGLONG)-1)
 #define FILE_USE_FILE_POINTER_POSITION ((LONGLONG)-2)
 
+typedef struct _TOKEN
+{
+    TOKEN_SOURCE TokenSource;                        /* 0x00 */
+    LUID TokenId;                                    /* 0x10 */
+    LUID AuthenticationId;                           /* 0x18 */
+    LUID ParentTokenId;                              /* 0x20 */
+    LARGE_INTEGER ExpirationTime;                    /* 0x28 */
+    //PERESOURCE TokenLock;                            /* 0x30 */
+    //SEP_AUDIT_POLICY AuditPolicy;                    /* 0x38 */
+    LUID ModifiedId;                                 /* 0x40 */
+    ULONG SessionId;                                 /* 0x48 */
+    ULONG UserAndGroupCount;                         /* 0x4C */
+    ULONG RestrictedSidCount;                        /* 0x50 */
+    ULONG PrivilegeCount;                            /* 0x54 */
+    ULONG VariableLength;                            /* 0x58 */
+    ULONG DynamicCharged;                            /* 0x5C */
+    ULONG DynamicAvailable;                          /* 0x60 */
+    ULONG DefaultOwnerIndex;                         /* 0x64 */
+    PSID_AND_ATTRIBUTES UserAndGroups;               /* 0x68 */
+    PSID_AND_ATTRIBUTES RestrictedSids;              /* 0x6C */
+    PSID PrimaryGroup;                               /* 0x70 */
+    PLUID_AND_ATTRIBUTES Privileges;                 /* 0x74 */
+    PULONG DynamicPart;                              /* 0x78 */
+    PACL DefaultDacl;                                /* 0x7C */
+    TOKEN_TYPE TokenType;                            /* 0x80 */
+    SECURITY_IMPERSONATION_LEVEL ImpersonationLevel; /* 0x84 */
+    ULONG TokenFlags;                                /* 0x88 */
+    BOOLEAN TokenInUse;                              /* 0x8C */
+    //PSECURITY_TOKEN_PROXY_DATA ProxyData;            /* 0x90 */
+    //PSECURITY_TOKEN_AUDIT_DATA AuditData;            /* 0x94 */
+    //PSEP_LOGON_SESSION_REFERENCES LogonSession;      /* 0x98 */
+    LUID OriginatingLogonSession;                    /* 0x9C */
+    ULONG VariablePart;                              /* 0xA4 */
+} TOKEN, *PTOKEN;
+
+typedef LONG LSTATUS;
+
 /* callbacks to PE ntdll from the Unix side */
 extern void     (WINAPI *pDbgUiRemoteBreakin)( void *arg ) DECLSPEC_HIDDEN;
 extern NTSTATUS (WINAPI *pKiRaiseUserExceptionDispatcher)(void) DECLSPEC_HIDDEN;
@@ -99,6 +137,17 @@ extern void     (WINAPI *pKiUserCallbackDispatcher)(ULONG,void*,ULONG) DECLSPEC_
 extern void     (WINAPI *pLdrInitializeThunk)(CONTEXT*,void**,ULONG_PTR,ULONG_PTR) DECLSPEC_HIDDEN;
 extern void     (WINAPI *pRtlUserThreadStart)( PRTL_THREAD_START_ROUTINE entry, void *arg ) DECLSPEC_HIDDEN;
 extern void     (WINAPI *p__wine_ctrl_routine)(void *) DECLSPEC_HIDDEN;
+extern NTSTATUS (WINAPI *pObReferenceObjectByPointer)( void*,ACCESS_MASK,POBJECT_TYPE,KPROCESSOR_MODE ) DECLSPEC_HIDDEN;
+extern NTSTATUS (WINAPI *pPsImpersonateClient)(PETHREAD Thread, PACCESS_TOKEN Token, BOOLEAN CopyOnOpen, BOOLEAN EffectiveOnly, SECURITY_IMPERSONATION_LEVEL ImpersonationLevel) DECLSPEC_HIDDEN;
+extern void     (WINAPI *pObDereferenceObject)(void*) DECLSPEC_HIDDEN;
+extern NTSTATUS (WINAPI *pObReferenceObjectByHandle)(HANDLE,ACCESS_MASK,POBJECT_TYPE,KPROCESSOR_MODE,PVOID*,POBJECT_HANDLE_INFORMATION) DECLSPEC_HIDDEN;
+extern PEPROCESS(WINAPI *pIoGetCurrentProcess)(void) DECLSPEC_HIDDEN;
+extern LSTATUS  (WINAPI *pRegQueryValueExW)(HKEY,LPCWSTR,LPDWORD,LPDWORD,LPBYTE,LPDWORD) DECLSPEC_HIDDEN;
+extern ULONG    (WINAPI *pExGetPreviousMode)(void) DECLSPEC_HIDDEN;
+extern PACCESS_TOKEN(WINAPI *pPsReferencePrimaryToken)(PEPROCESS process) DECLSPEC_HIDDEN;
+extern BOOLEAN  (WINAPI *pSeTokenIsRestricted)(PACCESS_TOKEN Token) DECLSPEC_HIDDEN;
+extern void     (WINAPI *pPsDereferencePrimaryToken)(PACCESS_TOKEN token) DECLSPEC_HIDDEN;
+
 extern SYSTEM_DLL_INIT_BLOCK *pLdrSystemDllInitBlock DECLSPEC_HIDDEN;
 
 extern NTSTATUS CDECL fast_RtlpWaitForCriticalSection( RTL_CRITICAL_SECTION *crit, int timeout ) DECLSPEC_HIDDEN;

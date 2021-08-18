@@ -3001,6 +3001,14 @@ NTSTATUS WINAPI PsCreateSystemThread(PHANDLE ThreadHandle, ULONG DesiredAccess,
 }
 
 /***********************************************************************
+ *           PsDereferencePrimaryToken   (NTOSKRNL.EXE.@)
+ */
+VOID WINAPI PsDereferencePrimaryToken(PACCESS_TOKEN token)
+{
+    ObDereferenceObject(token);
+}
+
+/***********************************************************************
  *           PsGetCurrentProcessId   (NTOSKRNL.EXE.@)
  */
 HANDLE WINAPI PsGetCurrentProcessId(void)
@@ -3118,7 +3126,7 @@ NTSTATUS WINAPI PsRemoveCreateThreadNotifyRoutine( PCREATE_THREAD_NOTIFY_ROUTINE
  *           PsRemoveLoadImageNotifyRoutine  (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI PsRemoveLoadImageNotifyRoutine(PLOAD_IMAGE_NOTIFY_ROUTINE routine)
- {
+{
     unsigned int i;
 
     TRACE("routine %p.\n", routine);
@@ -3132,8 +3140,17 @@ NTSTATUS WINAPI PsRemoveLoadImageNotifyRoutine(PLOAD_IMAGE_NOTIFY_ROUTINE routin
             return STATUS_SUCCESS;
         }
     return STATUS_PROCEDURE_NOT_FOUND;
- }
+}
 
+/***********************************************************************
+ *           PsReferencePrimaryToken  (NTOSKRNL.EXE.@)
+ */
+PACCESS_TOKEN WINAPI PsReferencePrimaryToken(PEPROCESS process)
+{
+    static int once;
+    if (!once++) FIXME("(%p) stub", process);
+    return NULL;
+}
 
 /***********************************************************************
  *           PsReferenceProcessFilePointer  (NTOSKRNL.EXE.@)
@@ -3981,6 +3998,14 @@ BOOLEAN WINAPI SeSinglePrivilegeCheck(LUID privilege, KPROCESSOR_MODE mode)
     static int once;
     if (!once++) FIXME("stub: %08x%08x %u\n", privilege.HighPart, privilege.LowPart, mode);
     return TRUE;
+}
+
+/*********************************************************************
+ *           SeTokenIsRestricted    (NTOSKRNL.@)
+ */
+BOOLEAN WINAPI SeTokenIsRestricted(PACCESS_TOKEN token)
+{
+    return (((PTOKEN)token)->TokenFlags & 0x0010) != 0;
 }
 
 /*********************************************************************

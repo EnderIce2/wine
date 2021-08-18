@@ -3,6 +3,6 @@ IMPORTLIB = win32u
 IMPORTS = ntoskrnl
 EXTRADEFS = -D_WIN32U_
 
-EXTRADLLFLAGS = -mno-cygwin,-Wl
+EXTRADLLFLAGS = -mno-cygwin -Wl
 
 C_SRCS = win32u.c

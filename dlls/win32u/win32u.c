@@ -1,7 +1,6 @@
 #include <stdarg.h>
 
 #include "winternl.h"
-#include "windef.h"
 #include "ntuser.h"
 #include "ddk/wdm.h"
 #include "win32u_private.h"

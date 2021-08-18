@@ -49,6 +49,10 @@ struct _OBJECT_TYPE
     void *(*constructor)(HANDLE); /* used for creating an object from server handle */
     void (*release)(void*);       /* called when the last reference is released */
 };
+typedef struct _TOKEN
+{
+    ULONG TokenFlags;
+} TOKEN, *PTOKEN;
 
 struct _EPROCESS
 {

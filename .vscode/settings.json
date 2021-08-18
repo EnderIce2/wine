@@ -19,6 +19,8 @@
         "istream": "c",
         "ostream": "c",
         "wdm.h": "c",
-        "win32u_private.h": "c"
+        "win32u_private.h": "c",
+        "thread": "c",
+        "ntuser.h": "c"
     }
 }

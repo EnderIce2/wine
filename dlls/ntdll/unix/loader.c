@@ -110,7 +110,18 @@ void     (WINAPI *pKiUserApcDispatcher)(CONTEXT*,ULONG_PTR,ULONG_PTR,ULONG_PTR,P
 void     (WINAPI *pKiUserCallbackDispatcher)(ULONG,void*,ULONG) = NULL;
 void     (WINAPI *pLdrInitializeThunk)(CONTEXT*,void**,ULONG_PTR,ULONG_PTR) = NULL;
 void     (WINAPI *pRtlUserThreadStart)( PRTL_THREAD_START_ROUTINE entry, void *arg ) = NULL;
+NTSTATUS (WINAPI *pObReferenceObjectByPointer)( void*,ACCESS_MASK,POBJECT_TYPE,KPROCESSOR_MODE ) = NULL;
+NTSTATUS (WINAPI *pPsImpersonateClient)(PETHREAD Thread, PACCESS_TOKEN Token, BOOLEAN CopyOnOpen, BOOLEAN EffectiveOnly, SECURITY_IMPERSONATION_LEVEL ImpersonationLevel) = NULL;
+void     (WINAPI *pObDereferenceObject)(void*) = NULL;
+NTSTATUS (WINAPI *pObReferenceObjectByHandle)(HANDLE,ACCESS_MASK,POBJECT_TYPE,KPROCESSOR_MODE,PVOID*,POBJECT_HANDLE_INFORMATION) = NULL;
+PEPROCESS(WINAPI *pIoGetCurrentProcess)(void) = NULL;
+LSTATUS  (WINAPI *pRegQueryValueExW)(HKEY,LPCWSTR,LPDWORD,LPDWORD,LPBYTE,LPDWORD) = NULL;
+ULONG    (WINAPI *pExGetPreviousMode)(void) = NULL;
+PACCESS_TOKEN(WINAPI *pPsReferencePrimaryToken)(PEPROCESS process) = NULL;
+BOOLEAN  (WINAPI *pSeTokenIsRestricted)(PACCESS_TOKEN Token) = NULL;
+void     (WINAPI *pPsDereferencePrimaryToken)(PACCESS_TOKEN token) = NULL;
 void     (WINAPI *p__wine_ctrl_routine)(void*);
+
 SYSTEM_DLL_INIT_BLOCK *pLdrSystemDllInitBlock = NULL;
 
 static NTSTATUS (CDECL *p__wine_set_unix_funcs)( int version, const struct unix_funcs *funcs );
@@ -837,6 +848,16 @@ static void load_ntdll_functions( HMODULE module )
     GET_FUNC( LdrInitializeThunk );
     GET_FUNC( LdrSystemDllInitBlock );
     GET_FUNC( RtlUserThreadStart );
+    GET_FUNC( ObReferenceObjectByPointer );
+    GET_FUNC( PsImpersonateClient );
+    GET_FUNC( ObDereferenceObject );
+    GET_FUNC( ObReferenceObjectByHandle );
+    GET_FUNC( IoGetCurrentProcess );
+    GET_FUNC( RegQueryValueExW );
+    GET_FUNC( ExGetPreviousMode );
+    GET_FUNC( SeTokenIsRestricted );
+    GET_FUNC( PsReferencePrimaryToken );
+    GET_FUNC( PsDereferencePrimaryToken );
     GET_FUNC( __wine_ctrl_routine );
     GET_FUNC( __wine_set_unix_funcs );
 #undef GET_FUNC

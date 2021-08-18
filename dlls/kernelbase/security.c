@@ -776,6 +776,87 @@ BOOL WINAPI ImpersonateLoggedOnUser( HANDLE token )
     else ret = SetThreadToken( NULL, token );
 
     return ret;
+
+
+
+
+
+    // SECURITY_QUALITY_OF_SERVICE Qos;
+    // OBJECT_ATTRIBUTES ObjectAttributes;
+    // HANDLE NewToken;
+    // TOKEN_TYPE Type;
+    // ULONG ReturnLength;
+    // BOOL Duplicated;
+    // NTSTATUS Status;
+
+    // /* Get the token type */
+    // Status = NtQueryInformationToken(token,
+    //                                  TokenType,
+    //                                  &Type,
+    //                                  sizeof(TOKEN_TYPE),
+    //                                  &ReturnLength);
+    // if (!NT_SUCCESS(Status))
+    // {
+    //     SetLastError(RtlNtStatusToDosError(Status));
+    //     return FALSE;
+    // }
+
+    // if (Type == TokenPrimary)
+    // {
+    //     /* Create a duplicate impersonation token */
+    //     Qos.Length = sizeof(SECURITY_QUALITY_OF_SERVICE);
+    //     Qos.ImpersonationLevel = SecurityImpersonation;
+    //     Qos.ContextTrackingMode = SECURITY_DYNAMIC_TRACKING;
+    //     Qos.EffectiveOnly = FALSE;
+
+    //     ObjectAttributes.Length = sizeof(OBJECT_ATTRIBUTES);
+    //     ObjectAttributes.RootDirectory = NULL;
+    //     ObjectAttributes.ObjectName = NULL;
+    //     ObjectAttributes.Attributes = 0;
+    //     ObjectAttributes.SecurityDescriptor = NULL;
+    //     ObjectAttributes.SecurityQualityOfService = &Qos;
+
+    //     Status = NtDuplicateToken(token,
+    //                               TOKEN_IMPERSONATE | TOKEN_QUERY,
+    //                               &ObjectAttributes,
+    //                               FALSE,
+    //                               TokenImpersonation,
+    //                               &NewToken);
+    //     if (!NT_SUCCESS(Status))
+    //     {
+    //         ERR("NtDuplicateToken failed: Status %08x\n", Status);
+    //         SetLastError(RtlNtStatusToDosError(Status));
+    //         return FALSE;
+    //     }
+
+    //     Duplicated = TRUE;
+    // }
+    // else
+    // {
+    //     /* User the original impersonation token */
+    //     NewToken = token;
+    //     Duplicated = FALSE;
+    // }
+
+    // /* Impersonate the the current thread */
+    // Status = NtSetInformationThread(NtCurrentThread(),
+    //                                 ThreadImpersonationToken,
+    //                                 &NewToken,
+    //                                 sizeof(HANDLE));
+
+    // if (Duplicated != FALSE)
+    // {
+    //     NtClose(NewToken);
+    // }
+
+    // if (!NT_SUCCESS(Status))
+    // {
+    //     ERR("NtSetInformationThread failed: Status %08x\n", Status);
+    //     SetLastError(RtlNtStatusToDosError(Status));
+    //     return FALSE;
+    // }
+
+    // return TRUE;
 }
 
 /******************************************************************************

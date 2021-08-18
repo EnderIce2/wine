@@ -787,6 +787,81 @@ NTSTATUS WINAPI NtPrivilegeCheck(HANDLE token, PRIVILEGE_SET *privs, BOOLEAN *re
     return status;
 }
 
+POBJECT_TYPE *PsThreadType = NULL;
+POBJECT_TYPE SeTokenObjectType = NULL;
+PTOKEN SeAnonymousLogonToken = NULL;
+PTOKEN SeAnonymousLogonTokenNoEveryone = NULL;
+
+NTSTATUS SepImpersonateAnonymousToken(PETHREAD thread, KPROCESSOR_MODE PreviousMode)
+{
+    FIXME("(%p, %c): stub\n", thread, PreviousMode);
+    return STATUS_NOT_IMPLEMENTED;
+    NTSTATUS status;
+    PTOKEN TokenToImpersonate, ProcessToken;
+    ULONG IncludeEveryoneValueData;
+
+    // this won't work
+    status = pRegQueryValueExW(L"\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\Lsa",
+                               L"EveryoneIncludesAnonymous",
+                               REG_DWORD,
+                               sizeof(IncludeEveryoneValueData),
+                               &IncludeEveryoneValueData, 0);
+    if (!NT_SUCCESS(status))
+    {
+        FIXME("Failed to query the registry value (0x%lx)\n", status);
+        return status;
+    }
+
+    if (IncludeEveryoneValueData == 0)
+    {
+        FIXME("Assigning the token not including the Everyone Group SID...\n");
+        TokenToImpersonate = SeAnonymousLogonTokenNoEveryone;
+    }
+    else
+    {
+        FIXME("Assigning the token including the Everyone Group SID...\n");
+        TokenToImpersonate = SeAnonymousLogonToken;
+    }
+
+    status = pObReferenceObjectByPointer(TokenToImpersonate,
+                                        TOKEN_IMPERSONATE,
+                                        SeTokenObjectType,
+                                        PreviousMode);
+    if (!NT_SUCCESS(status))
+    {
+        FIXME("Couldn't be able to use the token.\n");
+        return status;
+    }
+
+    ProcessToken = pPsReferencePrimaryToken(pIoGetCurrentProcess());
+    if (!ProcessToken)
+    {
+        FIXME("Couldn't be able to get the process primary token.\n");
+        pObDereferenceObject(TokenToImpersonate);
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if (pSeTokenIsRestricted(ProcessToken))
+    {
+        FIXME("The process is restricted, can't do anything.\n");
+        pPsDereferencePrimaryToken(ProcessToken);
+        pObDereferenceObject(TokenToImpersonate);
+        return STATUS_ACCESS_DENIED;
+    }
+
+    // this should impersonate, but it's not implemented yet, so we won't call it, even if i will call it, PsImpersonateClient is not implemented too =(
+    //ObFastDereferenceObject(&PsGetCurrentProcess()->Token, ProcessToken);
+    status = pPsImpersonateClient(thread, TokenToImpersonate, TRUE, FALSE, SecurityImpersonation);
+    if (!NT_SUCCESS(status))
+    {
+        FIXME("Failed to impersonate.\n");
+        pObDereferenceObject(TokenToImpersonate);
+        return status;
+    }
+
+    return status;
+}
+
 /***********************************************************************
  *             NtImpersonateAnonymousToken  (NTDLL.@)
  */
@@ -794,6 +869,32 @@ NTSTATUS WINAPI NtImpersonateAnonymousToken(HANDLE thread)
 {
     FIXME("(%p): stub\n", thread);
     return STATUS_NOT_IMPLEMENTED;
+    PETHREAD pethread;
+    KPROCESSOR_MODE PreviousMode;
+    NTSTATUS status;
+
+    PreviousMode = pExGetPreviousMode();
+
+    status = pObReferenceObjectByHandle(thread,
+                                       THREAD_IMPERSONATE,
+                                       PsThreadType,
+                                       PreviousMode,
+                                       (PVOID *)&pethread,
+                                       NULL);
+    if (!NT_SUCCESS(status))
+    {
+        ERR("Failed to reference the object (0x%lx)\n", status);
+        return status;
+    }
+
+    status = SepImpersonateAnonymousToken(pethread, PreviousMode);
+    if (!NT_SUCCESS(status))
+    {
+        ERR("Failed to impersonate the token (0x%lx)\n", status);
+    }
+
+    pObDereferenceObject(pethread);
+    return status;
 }
 
 /***********************************************************************
