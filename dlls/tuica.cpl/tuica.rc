@@ -28,7 +28,7 @@ CAPTION "Wine Patches"
 FONT 8, "Ms Shell Dlg"
 {
     GROUPBOX        "Roblox", IDC_STATIC, 4, 4, 312, 56
-    AUTOCHECKBOX    "Mouse Clipping Patch", IDC_USE_ROBLOX_MOUSE_PATCH, 10, 14, 200, 14, BS_TOP
+    AUTOCHECKBOX    "Mouse Clipping Patch", IDC_USE_ROBLOX_MOUSE_PATCH, 10, 14, 14, 14, BS_TOP
 }
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
@@ -37,7 +37,7 @@ LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 ICO_MAIN ICON "tuica.ico"
 
 #define WINE_FILENAME_STR "tuica.cpl"
-#define WINE_FILEDESCRIPTION_STR "Customize you Wine prefix"
+#define WINE_FILEDESCRIPTION_STR "Customize your Wine prefix"
 
 #ifndef WINE_FILEVERSION_MAJOR
 #define WINE_FILEVERSION_MAJOR 10

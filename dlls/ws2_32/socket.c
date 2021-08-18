@@ -2241,6 +2241,11 @@ INT WINAPI WSAIoctl(SOCKET s, DWORD code, LPVOID in_buff, DWORD in_size, LPVOID 
         return ret ? -1 : 0;
     }
 
+    case SIO_IDEAL_SEND_BACKLOG_QUERY:
+    {
+        return 0;
+    }
+
     default:
         FIXME( "unimplemented ioctl %s\n", debugstr_wsaioctl( code ) );
         /* fall through */

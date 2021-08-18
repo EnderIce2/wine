@@ -692,6 +692,7 @@
 @ stub MmCanFileBeTruncated
 @ stub MmCommitSessionMappedView
 @ stdcall MmCopyVirtualMemory(ptr ptr ptr ptr long long ptr)
+@ stdcall -arch=amd64 MmCopyMemory(ptr ptr ptr long ptr)
 @ stub MmCreateMdl
 @ stdcall MmCreateSection(ptr long ptr ptr long long long ptr)
 @ stub MmDisableModifiedWriteOfSection
@@ -818,6 +819,8 @@
 @ stdcall NtSetSecurityObject(long long ptr)
 @ stdcall NtSetVolumeInformationFile(long ptr ptr long long)
 @ stdcall NtShutdownSystem(long)
+@ stdcall NtTraceControl(ptr ptr ptr ptr ptr ptr)
+@ stdcall ZwTraceControl(ptr ptr ptr ptr ptr ptr)
 @ stub NtTraceEvent
 @ stdcall NtUnlockFile(long ptr ptr ptr ptr)
 @ stub NtVdmControl

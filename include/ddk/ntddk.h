@@ -229,6 +229,50 @@ typedef struct _PS_CREATE_NOTIFY_INFO {
     NTSTATUS             CreationStatus;
 } PS_CREATE_NOTIFY_INFO, *PPS_CREATE_NOTIFY_INFO;
 
+typedef enum _ETW_FUNCTION_CODE
+{
+    EtwFunctionStartTrace = 1,
+    EtwFunctionStopTrace = 2,
+    EtwFunctionQueryTrace = 3,
+    EtwFunctionUpdateTrace = 4,
+    EtwFunctionFlushTrace = 5,
+    EtwFunctionIncrementTraceFile = 6,
+
+    EtwFunctionRealtimeConnect = 11,
+    EtwFunctionWdiDispatchControl = 13,
+    EtwFunctionRealtimeDisconnectConsumerByHandle = 14,
+    EtwFunctionReceiveNotification = 16,
+    EtwFunctionTraceEnableGuid = 17, // EtwTraceNotifyGuid
+    EtwFunctionSendReplyDataBlock = 18,
+    EtwFunctionReceiveReplyDataBlock = 19,
+    EtwFunctionWdiUpdateSem = 20,
+    EtwFunctionGetTraceGuidList = 21,
+    EtwFunctionGetTraceGuidInfo = 22,
+    EtwFunctionEnumerateTraceGuids = 23,
+    EtwFunctionQueryReferenceTime = 25,
+    EtwFunctionTrackProviderBinary = 26,
+    EtwFunctionAddNotificationEvent = 27,
+    EtwFunctionUpdateDisallowList = 28,
+    EtwFunctionUseDescriptorTypeUm = 31,
+    EtwFunctionGetTraceGroupList = 32,
+    EtwFunctionGetTraceGroupInfo = 33,
+    EtwFunctionGetDisallowList = 34,
+    EtwFunctionSetCompressionSettings = 35,
+    EtwFunctionGetCompressionSettings = 36,
+    EtwFunctionUpdatePeriodicCaptureState = 37,
+    EtwFunctionGetPrivateSessionTraceHandle = 38,
+    EtwFunctionRegisterPrivateSession = 39,
+    EtwFunctionQuerySessionDemuxObject = 40,
+    EtwFunctionSetProviderBinaryTracking = 41,
+} ETW_FUNCTION_CODE;
+
+typedef struct _MM_COPY_ADDRESS {
+    union {
+        PVOID            VirtualAddress;
+        PHYSICAL_ADDRESS PhysicalAddress;
+    };
+} MM_COPY_ADDRESS, *PMMCOPY_ADDRESS;
+
 typedef void (WINAPI *PCREATE_PROCESS_NOTIFY_ROUTINE)(HANDLE,HANDLE,BOOLEAN);
 typedef void (WINAPI *PCREATE_PROCESS_NOTIFY_ROUTINE_EX)(PEPROCESS,HANDLE,PS_CREATE_NOTIFY_INFO*);
 typedef void (WINAPI *PCREATE_THREAD_NOTIFY_ROUTINE)(HANDLE,HANDLE,BOOLEAN);

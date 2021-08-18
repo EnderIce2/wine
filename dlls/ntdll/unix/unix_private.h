@@ -137,17 +137,16 @@ extern void     (WINAPI *pKiUserCallbackDispatcher)(ULONG,void*,ULONG) DECLSPEC_
 extern void     (WINAPI *pLdrInitializeThunk)(CONTEXT*,void**,ULONG_PTR,ULONG_PTR) DECLSPEC_HIDDEN;
 extern void     (WINAPI *pRtlUserThreadStart)( PRTL_THREAD_START_ROUTINE entry, void *arg ) DECLSPEC_HIDDEN;
 extern void     (WINAPI *p__wine_ctrl_routine)(void *) DECLSPEC_HIDDEN;
-extern NTSTATUS (WINAPI *pObReferenceObjectByPointer)( void*,ACCESS_MASK,POBJECT_TYPE,KPROCESSOR_MODE ) DECLSPEC_HIDDEN;
-extern NTSTATUS (WINAPI *pPsImpersonateClient)(PETHREAD Thread, PACCESS_TOKEN Token, BOOLEAN CopyOnOpen, BOOLEAN EffectiveOnly, SECURITY_IMPERSONATION_LEVEL ImpersonationLevel) DECLSPEC_HIDDEN;
-extern void     (WINAPI *pObDereferenceObject)(void*) DECLSPEC_HIDDEN;
-extern NTSTATUS (WINAPI *pObReferenceObjectByHandle)(HANDLE,ACCESS_MASK,POBJECT_TYPE,KPROCESSOR_MODE,PVOID*,POBJECT_HANDLE_INFORMATION) DECLSPEC_HIDDEN;
-extern PEPROCESS(WINAPI *pIoGetCurrentProcess)(void) DECLSPEC_HIDDEN;
-extern LSTATUS  (WINAPI *pRegQueryValueExW)(HKEY,LPCWSTR,LPDWORD,LPDWORD,LPBYTE,LPDWORD) DECLSPEC_HIDDEN;
-extern ULONG    (WINAPI *pExGetPreviousMode)(void) DECLSPEC_HIDDEN;
-extern PACCESS_TOKEN(WINAPI *pPsReferencePrimaryToken)(PEPROCESS process) DECLSPEC_HIDDEN;
-extern BOOLEAN  (WINAPI *pSeTokenIsRestricted)(PACCESS_TOKEN Token) DECLSPEC_HIDDEN;
-extern void     (WINAPI *pPsDereferencePrimaryToken)(PACCESS_TOKEN token) DECLSPEC_HIDDEN;
-
+// extern NTSTATUS (WINAPI *pObReferenceObjectByPointer)( void*,ACCESS_MASK,POBJECT_TYPE,KPROCESSOR_MODE ) DECLSPEC_HIDDEN;
+// extern NTSTATUS (WINAPI *pPsImpersonateClient)(PETHREAD Thread, PACCESS_TOKEN Token, BOOLEAN CopyOnOpen, BOOLEAN EffectiveOnly, SECURITY_IMPERSONATION_LEVEL ImpersonationLevel) DECLSPEC_HIDDEN;
+// extern void     (WINAPI *pObDereferenceObject)(void*) DECLSPEC_HIDDEN;
+// extern NTSTATUS (WINAPI *pObReferenceObjectByHandle)(HANDLE,ACCESS_MASK,POBJECT_TYPE,KPROCESSOR_MODE,PVOID*,POBJECT_HANDLE_INFORMATION) DECLSPEC_HIDDEN;
+// extern PEPROCESS(WINAPI *pIoGetCurrentProcess)(void) DECLSPEC_HIDDEN;
+// extern LSTATUS  (WINAPI *pRegQueryValueExW)(HKEY,LPCWSTR,LPDWORD,LPDWORD,LPBYTE,LPDWORD) DECLSPEC_HIDDEN;
+// extern ULONG    (WINAPI *pExGetPreviousMode)(void) DECLSPEC_HIDDEN;
+// extern PACCESS_TOKEN(WINAPI *pPsReferencePrimaryToken)(PEPROCESS process) DECLSPEC_HIDDEN;
+// extern BOOLEAN  (WINAPI *pSeTokenIsRestricted)(PACCESS_TOKEN Token) DECLSPEC_HIDDEN;
+// extern void     (WINAPI *pPsDereferencePrimaryToken)(PACCESS_TOKEN token) DECLSPEC_HIDDEN;
 extern SYSTEM_DLL_INIT_BLOCK *pLdrSystemDllInitBlock DECLSPEC_HIDDEN;
 
 extern NTSTATUS CDECL fast_RtlpWaitForCriticalSection( RTL_CRITICAL_SECTION *crit, int timeout ) DECLSPEC_HIDDEN;

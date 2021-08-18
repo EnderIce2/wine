@@ -4053,6 +4053,59 @@ PVOID WINAPI PsGetProcessWow64Process(PEPROCESS process)
     return NULL;
 }
 
+#define MM_COPY_MEMORY_PHYSICAL     0
+#define MM_COPY_MEMORY_VIRTUAL      1
+
+// the strange thing here is that i need to add -arch=amd64 in the spec file to work or "undefined reference to `MmCopyMemory@20'", eh, who tf is using 32bit on games (these functions are for anti-cheats)
+
+/***********************************************************************
+ *                   MmCopyMemory   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI MmCopyMemory(PVOID TargetAddress, MM_COPY_ADDRESS SourceAddress, SIZE_T NumberOfBytes, ULONG Flags, SIZE_T NumberOfBytesTransferred)
+{
+    // why STATUS_SEVERITY_ERROR? because in almost every case, developers are using NT_SUCCESS to check if the call was successful. so, there is no need to add proper error
+    NTSTATUS status = STATUS_SUCCESS;
+    switch (Flags)
+    {
+    case MM_COPY_MEMORY_VIRTUAL:
+        NumberOfBytesTransferred = memcpy(TargetAddress, &SourceAddress.VirtualAddress, NumberOfBytes);
+        if (NumberOfBytesTransferred <= 0)
+            status = STATUS_SEVERITY_ERROR;
+        break;
+    case MM_COPY_MEMORY_PHYSICAL:
+        NumberOfBytesTransferred = memcpy(TargetAddress, &SourceAddress.PhysicalAddress, NumberOfBytes);
+        if (NumberOfBytesTransferred <= 0)
+            status = STATUS_SEVERITY_ERROR;
+        break;
+    default:
+        status = STATUS_INVALID_PARAMETER;
+        break;
+    }
+    return status;
+}
+
+// NtTraceControl and ZwTraceControl are not documented on micro$oft forums or whatever, that's why i am implemented stubs with return code STATUS_SUCCESS.
+
+/***********************************************************************
+ *              NtTraceControl   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS NTAPI NtTraceControl(ETW_FUNCTION_CODE Operation, LPVOID InputBuffer, DWORD InputSize, LPVOID OutputBuffer, DWORD OutputSize, LPDWORD BytesReturned)
+{
+    *BytesReturned = InputSize;
+    FIXME("%d %p %p %u %n\n", Operation, InputBuffer, OutputBuffer, OutputSize, BytesReturned);
+    return STATUS_SUCCESS;
+}
+
+/***********************************************************************
+ *              ZwTraceControl   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS NTAPI ZwTraceControl(ETW_FUNCTION_CODE FunctionCode, PVOID InBuffer, ULONG InBufferLen, PVOID OutBuffer, ULONG OutBufferLen, PULONG ReturnLength)
+{
+    *ReturnLength = InBufferLen;
+    FIXME("%d %p %d %p %u %p\n", FunctionCode, InBuffer, InBufferLen, OutBuffer, OutBufferLen, ReturnLength);
+    return STATUS_SUCCESS;
+}
+
 /*********************************************************************
  *           MmCopyVirtualMemory    (NTOSKRNL.@)
  */

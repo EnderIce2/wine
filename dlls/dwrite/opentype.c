@@ -2211,6 +2211,12 @@ static UINT get_name_record_codepage(enum OPENTYPE_PLATFORM_ID platform, USHORT 
             case TT_NAME_MAC_ENCODING_THAI:
                 codepage = 10021;
                 break;
+            case TT_NAME_MAC_ENCODING_KHMER:
+                codepage = (1L << 16);
+                break;
+            case TT_NAME_MAC_ENCODING_SLAVIC:
+                codepage = 20866;
+                break;
             default:
                 FIXME("encoding %u not handled, platform %d.\n", encoding, platform);
                 break;

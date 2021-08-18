@@ -1866,9 +1866,10 @@ BOOL CDECL X11DRV_ActivateKeyboardLayout(HKL hkl, UINT flags)
 
     if (!match_x11_keyboard_layout(hkl))
     {
-        SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-        FIXME("setting keyboard of different locales not supported\n");
-        return FALSE;
+        //SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+        //FIXME("setting keyboard of different locales not supported\n");
+        FIXME("i will return TRUE even that setting setting different locales for keyboard layout is not supported\n");
+        return TRUE;
     }
 
     return TRUE;
