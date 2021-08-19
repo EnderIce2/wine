@@ -187,6 +187,7 @@ struct afd_get_events_params
 #define IOCTL_AFD_WINE_SET_IP_DONTFRAGMENT              WINE_AFD_IOC(243)
 #define IOCTL_AFD_WINE_SET_IP_DROP_MEMBERSHIP           WINE_AFD_IOC(244)
 #define IOCTL_AFD_WINE_SET_IP_DROP_SOURCE_MEMBERSHIP    WINE_AFD_IOC(245)
+#define IOCTL_AFD_WINE_GET_IP_HDRINCL                   WINE_AFD_IOC(246)
 #define IOCTL_AFD_WINE_SET_IP_HDRINCL                   WINE_AFD_IOC(247)
 #define IOCTL_AFD_WINE_GET_IP_MULTICAST_IF              WINE_AFD_IOC(248)
 #define IOCTL_AFD_WINE_SET_IP_MULTICAST_IF              WINE_AFD_IOC(249)
@@ -232,6 +233,7 @@ struct afd_get_events_params
 #define IOCTL_AFD_WINE_SET_IPV6_RECVPKTINFO             WINE_AFD_IOC(289)
 #define IOCTL_AFD_WINE_GET_IPV6_RECVTCLASS              WINE_AFD_IOC(290)
 #define IOCTL_AFD_WINE_SET_IPV6_RECVTCLASS              WINE_AFD_IOC(291)
+#define IOCTL_AFD_WINE_GET_SO_CONNECT_TIME              WINE_AFD_IOC(292)
 
 struct afd_create_params
 {

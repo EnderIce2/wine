@@ -316,12 +316,38 @@ COLORREF WINAPI GetDCBrushColor( HDC hdc )
 }
 
 /***********************************************************************
+ *           SetDCBrushColor    (GDI32.@)
+ */
+COLORREF WINAPI SetDCBrushColor( HDC hdc, COLORREF color )
+{
+    DC_ATTR *dc_attr;
+    COLORREF ret;
+
+    if (!(dc_attr = get_dc_attr( hdc ))) return CLR_INVALID;
+    if (dc_attr->emf && !EMFDC_SetDCBrushColor( dc_attr, color )) return CLR_INVALID;
+    return NtGdiGetAndSetDCDword( hdc, NtGdiSetDCBrushColor, color, &ret ) ? ret : CLR_INVALID;
+}
+
+/***********************************************************************
  *           GetDCPenColor    (GDI32.@)
  */
 COLORREF WINAPI GetDCPenColor(HDC hdc)
 {
     DC_ATTR *dc_attr = get_dc_attr( hdc );
     return dc_attr ? dc_attr->pen_color : CLR_INVALID;
+}
+
+/***********************************************************************
+ *           SetDCPenColor    (GDI32.@)
+ */
+COLORREF WINAPI SetDCPenColor( HDC hdc, COLORREF color )
+{
+    DC_ATTR *dc_attr;
+    COLORREF ret;
+
+    if (!(dc_attr = get_dc_attr( hdc ))) return CLR_INVALID;
+    if (dc_attr->emf && !EMFDC_SetDCPenColor( dc_attr, color )) return CLR_INVALID;
+    return NtGdiGetAndSetDCDword( hdc, NtGdiSetDCPenColor, color, &ret ) ? ret : CLR_INVALID;
 }
 
 /***********************************************************************
@@ -1325,21 +1351,6 @@ BOOL WINAPI GdiGradientFill( HDC hdc, TRIVERTEX *vert_array, ULONG nvert,
 }
 
 /***********************************************************************
- *           ExtTextOutW    (GDI32.@)
- */
-BOOL WINAPI ExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *rect,
-                         const WCHAR *str, UINT count, const INT *dx )
-{
-    DC_ATTR *dc_attr;
-
-    if (is_meta_dc( hdc )) return METADC_ExtTextOut( hdc, x, y, flags, rect, str, count, dx );
-    if (!(dc_attr = get_dc_attr( hdc ))) return FALSE;
-    if (dc_attr->emf && !EMFDC_ExtTextOut( dc_attr, x, y, flags, rect, str, count, dx ))
-        return FALSE;
-    return NtGdiExtTextOutW( hdc, x, y, flags, rect, str, count, dx, 0 );
-}
-
-/***********************************************************************
  *           SetTextJustification    (GDI32.@)
  */
 BOOL WINAPI SetTextJustification( HDC hdc, INT extra, INT breaks )
@@ -1517,6 +1528,78 @@ BOOL WINAPI CloseFigure( HDC hdc )
     if (!(dc_attr = get_dc_attr( hdc ))) return FALSE;
     if (dc_attr->emf && !EMFDC_CloseFigure( dc_attr )) return FALSE;
     return NtGdiCloseFigure( hdc );
+}
+
+/***********************************************************************
+ *           FillPath    (GDI32.@)
+ */
+BOOL WINAPI FillPath( HDC hdc )
+{
+    DC_ATTR *dc_attr;
+
+    if (!(dc_attr = get_dc_attr( hdc ))) return FALSE;
+    if (dc_attr->emf && !EMFDC_FillPath( dc_attr )) return FALSE;
+    return NtGdiFillPath( hdc );
+}
+
+/*******************************************************************
+ *           StrokeAndFillPath   (GDI32.@)
+ */
+BOOL WINAPI StrokeAndFillPath( HDC hdc )
+{
+    DC_ATTR *dc_attr;
+
+    if (!(dc_attr = get_dc_attr( hdc ))) return FALSE;
+    if (dc_attr->emf && !EMFDC_StrokeAndFillPath( dc_attr )) return FALSE;
+    return NtGdiStrokeAndFillPath( hdc );
+}
+
+/*******************************************************************
+ *           StrokePath   (GDI32.@)
+ */
+BOOL WINAPI StrokePath( HDC hdc )
+{
+    DC_ATTR *dc_attr;
+
+    if (!(dc_attr = get_dc_attr( hdc ))) return FALSE;
+    if (dc_attr->emf && !EMFDC_StrokePath( dc_attr )) return FALSE;
+    return NtGdiStrokePath( hdc );
+}
+
+/***********************************************************************
+ *           FlattenPath   (GDI32.@)
+ */
+BOOL WINAPI FlattenPath( HDC hdc )
+{
+    DC_ATTR *dc_attr;
+
+    if (!(dc_attr = get_dc_attr( hdc ))) return FALSE;
+    if (dc_attr->emf && !EMFDC_FlattenPath( dc_attr )) return FALSE;
+    return NtGdiFlattenPath( hdc );
+}
+
+/***********************************************************************
+ *           WidenPath   (GDI32.@)
+ */
+BOOL WINAPI WidenPath( HDC hdc )
+{
+    DC_ATTR *dc_attr;
+
+    if (!(dc_attr = get_dc_attr( hdc ))) return FALSE;
+    if (dc_attr->emf && !EMFDC_WidenPath( dc_attr )) return FALSE;
+    return NtGdiWidenPath( hdc );
+}
+
+/***********************************************************************
+ *           SelectClipPath    (GDI32.@)
+ */
+BOOL WINAPI SelectClipPath( HDC hdc, INT mode )
+{
+    DC_ATTR *dc_attr;
+
+    if (!(dc_attr = get_dc_attr( hdc ))) return FALSE;
+    if (dc_attr->emf && !EMFDC_SelectClipPath( dc_attr, mode )) return FALSE;
+    return NtGdiSelectClipPath( hdc, mode );
 }
 
 /***********************************************************************

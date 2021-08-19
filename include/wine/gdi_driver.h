@@ -94,7 +94,6 @@ struct gdi_dc_funcs
     BOOL     (CDECL *pExtTextOut)(PHYSDEV,INT,INT,UINT,const RECT*,LPCWSTR,UINT,const INT*);
     BOOL     (CDECL *pFillPath)(PHYSDEV);
     BOOL     (CDECL *pFillRgn)(PHYSDEV,HRGN,HBRUSH);
-    BOOL     (CDECL *pFlattenPath)(PHYSDEV);
     BOOL     (CDECL *pFontIsLinked)(PHYSDEV);
     BOOL     (CDECL *pFrameRgn)(PHYSDEV,HRGN,HBRUSH,INT,INT);
     UINT     (CDECL *pGetBoundsRect)(PHYSDEV,RECT*,UINT);
@@ -142,7 +141,6 @@ struct gdi_dc_funcs
     BOOL     (CDECL *pRoundRect)(PHYSDEV,INT,INT,INT,INT,INT,INT);
     HBITMAP  (CDECL *pSelectBitmap)(PHYSDEV,HBITMAP);
     HBRUSH   (CDECL *pSelectBrush)(PHYSDEV,HBRUSH,const struct brush_pattern*);
-    BOOL     (CDECL *pSelectClipPath)(PHYSDEV,INT);
     HFONT    (CDECL *pSelectFont)(PHYSDEV,HFONT,UINT*);
     HPEN     (CDECL *pSelectPen)(PHYSDEV,HPEN,const struct brush_pattern*);
     COLORREF (CDECL *pSetBkColor)(PHYSDEV,COLORREF);
@@ -161,7 +159,6 @@ struct gdi_dc_funcs
     BOOL     (CDECL *pStrokeAndFillPath)(PHYSDEV);
     BOOL     (CDECL *pStrokePath)(PHYSDEV);
     BOOL     (CDECL *pUnrealizePalette)(HPALETTE);
-    BOOL     (CDECL *pWidenPath)(PHYSDEV);
     NTSTATUS (CDECL *pD3DKMTCheckVidPnExclusiveOwnership)(const D3DKMT_CHECKVIDPNEXCLUSIVEOWNERSHIP *);
     NTSTATUS (CDECL *pD3DKMTSetVidPnSourceOwner)(const D3DKMT_SETVIDPNSOURCEOWNER *);
     struct opengl_funcs * (CDECL *wine_get_wgl_driver)(PHYSDEV,UINT);
@@ -172,7 +169,7 @@ struct gdi_dc_funcs
 };
 
 /* increment this when you change the DC function table */
-#define WINE_GDI_DRIVER_VERSION 61
+#define WINE_GDI_DRIVER_VERSION 63
 
 #define GDI_PRIORITY_NULL_DRV        0  /* null driver */
 #define GDI_PRIORITY_FONT_DRV      100  /* any font driver */

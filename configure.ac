@@ -468,7 +468,6 @@ AC_CHECK_HEADERS(\
 	gsm/gsm.h \
 	ieeefp.h \
 	inet/mib2.h \
-	kstat.h \
 	libproc.h \
 	link.h \
 	linux/cdrom.h \
@@ -1499,7 +1498,7 @@ then
          AC_LINK_IFELSE([AC_LANG_PROGRAM([[#ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
-#include <resolv.h>]],[[if (!(_res.options & RES_INIT)) res_init(); res_query("foo",ns_c_in,0,0,0)]])],
+#include <resolv.h>]],[[if (!(_res.options & RES_INIT)) res_init(); res_query("foo",ns_c_in,0,0,0); ns_initparse(0,0,0)]])],
            [ac_cv_have_resolv=${lib:-"none required"}],[ac_cv_have_resolv="not found"])
          test "x$ac_cv_have_resolv" = "xnot found" || break
        done
@@ -1942,14 +1941,6 @@ then
     enable_xaudio2_7=${enable_xaudio2_7:-no}
     enable_xaudio2_8=${enable_xaudio2_8:-no}
     enable_xaudio2_9=${enable_xaudio2_9:-no}
-fi
-
-dnl **** Check for libkstat ****
-if test "$ac_cv_header_kstat_h" = "yes"
-then
-    AC_CHECK_LIB(kstat,kstat_open,
-                 [AC_DEFINE(HAVE_LIBKSTAT, 1, [Define to 1 if you have the `kstat' library (-lkstat).])
-                  AC_SUBST(KSTAT_LIBS,"-lkstat")])
 fi
 
 dnl **** Check for libprocstat ****
@@ -2846,6 +2837,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-profile-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-psapi-ansi-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-psapi-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-psapi-obsolete-l1-1-0)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-psm-appnotify-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-quirks-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-realtime-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-registry-l1-1-0)

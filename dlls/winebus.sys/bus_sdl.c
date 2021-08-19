@@ -487,6 +487,13 @@ static int compare_platform_device(DEVICE_OBJECT *device, void *context)
     return impl_from_DEVICE_OBJECT(device)->id - PtrToUlong(context);
 }
 
+static NTSTATUS start_device(DEVICE_OBJECT *device)
+{
+    struct platform_private *ext = impl_from_DEVICE_OBJECT(device);
+    if (ext->sdl_controller) return build_mapped_report_descriptor(ext);
+    return build_report_descriptor(ext);
+}
+
 static NTSTATUS get_reportdescriptor(DEVICE_OBJECT *device, BYTE *buffer, DWORD length, DWORD *out_length)
 {
     struct platform_private *ext = impl_from_DEVICE_OBJECT(device);
@@ -529,19 +536,14 @@ static NTSTATUS get_string(DEVICE_OBJECT *device, DWORD index, WCHAR *buffer, DW
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS begin_report_processing(DEVICE_OBJECT *device)
-{
-    return STATUS_SUCCESS;
-}
-
-static NTSTATUS set_output_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *written)
+static void set_output_report(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
 {
     struct platform_private *ext = impl_from_DEVICE_OBJECT(device);
 
-    if (ext->sdl_haptic && id == 0)
+    if (ext->sdl_haptic && packet->reportId == 0)
     {
-        WORD left = report[2] * 128;
-        WORD right = report[3] * 128;
+        WORD left = packet->reportBuffer[2] * 128;
+        WORD right = packet->reportBuffer[3] * 128;
 
         if (ext->haptic_effect_id >= 0)
         {
@@ -570,35 +572,36 @@ static NTSTATUS set_output_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report,
                 pSDL_HapticRumblePlay(ext->sdl_haptic, i, -1);
             }
         }
-        *written = length;
-        return STATUS_SUCCESS;
+
+        io->Information = packet->reportBufferLen;
+        io->Status = STATUS_SUCCESS;
     }
     else
     {
-        *written = 0;
-        return STATUS_NOT_IMPLEMENTED;
+        io->Information = 0;
+        io->Status = STATUS_NOT_IMPLEMENTED;
     }
 }
 
-static NTSTATUS get_feature_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *read)
+static void get_feature_report(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
 {
-    *read = 0;
-    return STATUS_NOT_IMPLEMENTED;
+    io->Information = 0;
+    io->Status = STATUS_NOT_IMPLEMENTED;
 }
 
-static NTSTATUS set_feature_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *written)
+static void set_feature_report(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
 {
-    *written = 0;
-    return STATUS_NOT_IMPLEMENTED;
+    io->Information = 0;
+    io->Status = STATUS_NOT_IMPLEMENTED;
 }
 
 static const platform_vtbl sdl_vtbl =
 {
     free_device,
     compare_platform_device,
+    start_device,
     get_reportdescriptor,
     get_string,
-    begin_report_processing,
     set_output_report,
     get_feature_report,
     set_feature_report,
@@ -791,25 +794,10 @@ static void try_add_device(unsigned int index)
 
     if (device)
     {
-        NTSTATUS status;
         struct platform_private *private = impl_from_DEVICE_OBJECT(device);
         private->sdl_joystick = joystick;
         private->sdl_controller = controller;
         private->id = id;
-
-        /* FIXME: We should probably move this to IRP_MN_START_DEVICE. */
-        if (controller)
-            status = build_mapped_report_descriptor(private);
-        else
-            status = build_report_descriptor(private);
-        if (status)
-        {
-            ERR("Building report descriptor failed, removing device\n");
-            bus_unlink_hid_device(device);
-            bus_remove_hid_device(device);
-            HeapFree(GetProcessHeap(), 0, serial);
-            return;
-        }
         IoInvalidateDeviceRelations(bus_pdo, BusRelations);
     }
     else

@@ -376,44 +376,32 @@ BOOL EMFDC_EndPath( DC_ATTR *dc_attr )
     return EMFDRV_WriteRecord( &emf->dev, &emr.emr );
 }
 
-BOOL CDECL EMFDRV_FlattenPath( PHYSDEV dev )
+BOOL EMFDC_FlattenPath( DC_ATTR *dc_attr )
 {
     EMRFLATTENPATH emr;
 
     emr.emr.iType = EMR_FLATTENPATH;
     emr.emr.nSize = sizeof(emr);
-
-    return EMFDRV_WriteRecord( dev, &emr.emr );
+    return EMFDRV_WriteRecord( dc_attr->emf, &emr.emr );
 }
 
-BOOL CDECL EMFDRV_SelectClipPath( PHYSDEV dev, INT iMode )
+BOOL EMFDC_SelectClipPath( DC_ATTR *dc_attr, INT mode )
 {
     EMRSELECTCLIPPATH emr;
-    BOOL ret = FALSE;
-    HRGN hrgn;
 
     emr.emr.iType = EMR_SELECTCLIPPATH;
     emr.emr.nSize = sizeof(emr);
-    emr.iMode = iMode;
-
-    if (!EMFDRV_WriteRecord( dev, &emr.emr )) return FALSE;
-    hrgn = PathToRegion( dev->hdc );
-    if (hrgn)
-    {
-        ret = NtGdiExtSelectClipRgn( dev->hdc, hrgn, iMode );
-        DeleteObject( hrgn );
-    }
-    return ret;
+    emr.iMode = mode;
+    return EMFDRV_WriteRecord( dc_attr->emf, &emr.emr );
 }
 
-BOOL CDECL EMFDRV_WidenPath( PHYSDEV dev )
+BOOL EMFDC_WidenPath( DC_ATTR *dc_attr )
 {
     EMRWIDENPATH emr;
 
     emr.emr.iType = EMR_WIDENPATH;
     emr.emr.nSize = sizeof(emr);
-
-    return EMFDRV_WriteRecord( dev, &emr.emr );
+    return EMFDRV_WriteRecord( dc_attr->emf, &emr.emr );
 }
 
 INT CDECL EMFDRV_GetDeviceCaps(PHYSDEV dev, INT cap)

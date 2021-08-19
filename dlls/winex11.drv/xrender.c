@@ -2181,7 +2181,6 @@ static const struct gdi_dc_funcs xrender_funcs =
     xrenderdrv_ExtTextOut,              /* pExtTextOut */
     NULL,                               /* pFillPath */
     NULL,                               /* pFillRgn */
-    NULL,                               /* pFlattenPath */
     NULL,                               /* pFontIsLinked */
     NULL,                               /* pFrameRgn */
     NULL,                               /* pGetBoundsRect */
@@ -2229,7 +2228,6 @@ static const struct gdi_dc_funcs xrender_funcs =
     NULL,                               /* pRoundRect */
     NULL,                               /* pSelectBitmap */
     xrenderdrv_SelectBrush,             /* pSelectBrush */
-    NULL,                               /* pSelectClipPath */
     xrenderdrv_SelectFont,              /* pSelectFont */
     NULL,                               /* pSelectPen */
     NULL,                               /* pSetBkColor */
@@ -2248,7 +2246,6 @@ static const struct gdi_dc_funcs xrender_funcs =
     NULL,                               /* pStrokeAndFillPath */
     NULL,                               /* pStrokePath */
     NULL,                               /* pUnrealizePalette */
-    NULL,                               /* pWidenPath */
     NULL,                               /* pD3DKMTCheckVidPnExclusiveOwnership */
     NULL,                               /* pD3DKMTSetVidPnSourceOwner */
     NULL,                               /* wine_get_wgl_driver */

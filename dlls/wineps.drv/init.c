@@ -804,7 +804,6 @@ static const struct gdi_dc_funcs psdrv_funcs =
     PSDRV_ExtTextOut,                   /* pExtTextOut */
     PSDRV_FillPath,                     /* pFillPath */
     NULL,                               /* pFillRgn */
-    NULL,                               /* pFlattenPath */
     NULL,                               /* pFontIsLinked */
     NULL,                               /* pFrameRgn */
     NULL,                               /* pGetBoundsRect */
@@ -852,7 +851,6 @@ static const struct gdi_dc_funcs psdrv_funcs =
     PSDRV_RoundRect,                    /* pRoundRect */
     NULL,                               /* pSelectBitmap */
     PSDRV_SelectBrush,                  /* pSelectBrush */
-    NULL,                               /* pSelectClipPath */
     PSDRV_SelectFont,                   /* pSelectFont */
     PSDRV_SelectPen,                    /* pSelectPen */
     PSDRV_SetBkColor,                   /* pSetBkColor */
@@ -871,7 +869,6 @@ static const struct gdi_dc_funcs psdrv_funcs =
     PSDRV_StrokeAndFillPath,            /* pStrokeAndFillPath */
     PSDRV_StrokePath,                   /* pStrokePath */
     NULL,                               /* pUnrealizePalette */
-    NULL,                               /* pWidenPath */
     NULL,                               /* pD3DKMTCheckVidPnExclusiveOwnership */
     NULL,                               /* pD3DKMTSetVidPnSourceOwner */
     NULL,                               /* wine_get_wgl_driver */

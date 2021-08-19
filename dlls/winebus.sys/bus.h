@@ -22,6 +22,7 @@
 #include <winbase.h>
 #include <winternl.h>
 #include <ddk/wdm.h>
+#include <ddk/hidclass.h>
 #include <hidusage.h>
 
 typedef int(*enum_func)(DEVICE_OBJECT *device, void *context);
@@ -39,12 +40,12 @@ typedef struct
 {
     void (*free_device)(DEVICE_OBJECT *device);
     int (*compare_platform_device)(DEVICE_OBJECT *device, void *platform_dev);
+    NTSTATUS (*start_device)(DEVICE_OBJECT *device);
     NTSTATUS (*get_reportdescriptor)(DEVICE_OBJECT *device, BYTE *buffer, DWORD length, DWORD *out_length);
     NTSTATUS (*get_string)(DEVICE_OBJECT *device, DWORD index, WCHAR *buffer, DWORD length);
-    NTSTATUS (*begin_report_processing)(DEVICE_OBJECT *device);
-    NTSTATUS (*set_output_report)(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *written);
-    NTSTATUS (*get_feature_report)(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *read);
-    NTSTATUS (*set_feature_report)(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *written);
+    void (*set_output_report)(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io);
+    void (*get_feature_report)(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io);
+    void (*set_feature_report)(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io);
 } platform_vtbl;
 
 void *get_platform_private(DEVICE_OBJECT *device) DECLSPEC_HIDDEN;
@@ -55,7 +56,6 @@ DEVICE_OBJECT *bus_create_hid_device(const WCHAR *busidW, WORD vid, WORD pid,
                                      const platform_vtbl *vtbl, DWORD platform_data_size) DECLSPEC_HIDDEN;
 DEVICE_OBJECT *bus_find_hid_device(const WCHAR *bus_id, void *platform_dev) DECLSPEC_HIDDEN;
 void bus_unlink_hid_device(DEVICE_OBJECT *device) DECLSPEC_HIDDEN;
-void bus_remove_hid_device(DEVICE_OBJECT *device) DECLSPEC_HIDDEN;
 void process_hid_report(DEVICE_OBJECT *device, BYTE *report, DWORD length) DECLSPEC_HIDDEN;
 DEVICE_OBJECT *bus_enumerate_hid_devices(const WCHAR *bus_id, enum_func function, void *context) DECLSPEC_HIDDEN;
 

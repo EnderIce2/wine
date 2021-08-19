@@ -558,6 +558,30 @@ static int compare_platform_device(DEVICE_OBJECT *device, void *platform_dev)
     return strcmp(udev_device_get_syspath(dev1), udev_device_get_syspath(dev2));
 }
 
+static DWORD CALLBACK device_report_thread(void *args);
+
+static NTSTATUS hidraw_start_device(DEVICE_OBJECT *device)
+{
+    struct platform_private *private = impl_from_DEVICE_OBJECT(device);
+
+    if (pipe(private->control_pipe) != 0)
+    {
+        ERR("Control pipe creation failed\n");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    private->report_thread = CreateThread(NULL, 0, device_report_thread, device, 0, NULL);
+    if (!private->report_thread)
+    {
+        ERR("Unable to create device report thread\n");
+        close(private->control_pipe[0]);
+        close(private->control_pipe[1]);
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    return STATUS_SUCCESS;
+}
+
 static NTSTATUS hidraw_get_reportdescriptor(DEVICE_OBJECT *device, BYTE *buffer, DWORD length, DWORD *out_length)
 {
 #ifdef HAVE_LINUX_HIDRAW_H
@@ -692,125 +716,103 @@ static DWORD CALLBACK device_report_thread(void *args)
     return 0;
 }
 
-static NTSTATUS begin_report_processing(DEVICE_OBJECT *device)
-{
-    struct platform_private *private = impl_from_DEVICE_OBJECT(device);
-
-    if (private->report_thread)
-        return STATUS_SUCCESS;
-
-    if (pipe(private->control_pipe) != 0)
-    {
-        ERR("Control pipe creation failed\n");
-        return STATUS_UNSUCCESSFUL;
-    }
-
-    private->report_thread = CreateThread(NULL, 0, device_report_thread, device, 0, NULL);
-    if (!private->report_thread)
-    {
-        ERR("Unable to create device report thread\n");
-        close(private->control_pipe[0]);
-        close(private->control_pipe[1]);
-        return STATUS_UNSUCCESSFUL;
-    }
-    else
-        return STATUS_SUCCESS;
-}
-
-static NTSTATUS hidraw_set_output_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *written)
+static void hidraw_set_output_report(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
 {
     struct platform_private* ext = impl_from_DEVICE_OBJECT(device);
+    ULONG length = packet->reportBufferLen;
     BYTE buffer[8192];
     int count = 0;
 
-    if ((buffer[0] = id))
-        count = write(ext->device_fd, report, length);
+    if ((buffer[0] = packet->reportId))
+        count = write(ext->device_fd, packet->reportBuffer, length);
     else if (length > sizeof(buffer) - 1)
-        ERR_(hid_report)("id %d length %u >= 8192, cannot write\n", id, length);
+        ERR_(hid_report)("id %d length %u >= 8192, cannot write\n", packet->reportId, length);
     else
     {
-        memcpy(buffer + 1, report, length);
+        memcpy(buffer + 1, packet->reportBuffer, length);
         count = write(ext->device_fd, buffer, length + 1);
     }
 
     if (count > 0)
     {
-        *written = count;
-        return STATUS_SUCCESS;
+        io->Information = count;
+        io->Status = STATUS_SUCCESS;
     }
     else
     {
-        ERR_(hid_report)("id %d write failed error: %d %s\n", id, errno, strerror(errno));
-        *written = 0;
-        return STATUS_UNSUCCESSFUL;
+        ERR_(hid_report)("id %d write failed error: %d %s\n", packet->reportId, errno, strerror(errno));
+        io->Information = 0;
+        io->Status = STATUS_UNSUCCESSFUL;
     }
 }
 
-static NTSTATUS hidraw_get_feature_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *read)
+static void hidraw_get_feature_report(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
 {
 #if defined(HAVE_LINUX_HIDRAW_H) && defined(HIDIOCGFEATURE)
     struct platform_private* ext = impl_from_DEVICE_OBJECT(device);
+    ULONG length = packet->reportBufferLen;
     BYTE buffer[8192];
     int count = 0;
 
-    if ((buffer[0] = id) && length <= 0x1fff)
-        count = ioctl(ext->device_fd, HIDIOCGFEATURE(length), report);
+    if ((buffer[0] = packet->reportId) && length <= 0x1fff)
+        count = ioctl(ext->device_fd, HIDIOCGFEATURE(length), packet->reportBuffer);
     else if (length > sizeof(buffer) - 1)
-        ERR_(hid_report)("id %d length %u >= 8192, cannot read\n", id, length);
+        ERR_(hid_report)("id %d length %u >= 8192, cannot read\n", packet->reportId, length);
     else
     {
         count = ioctl(ext->device_fd, HIDIOCGFEATURE(length + 1), buffer);
-        memcpy(report, buffer + 1, length);
+        memcpy(packet->reportBuffer, buffer + 1, length);
     }
 
     if (count > 0)
     {
-        *read = count;
-        return STATUS_SUCCESS;
+        io->Information = count;
+        io->Status = STATUS_SUCCESS;
     }
     else
     {
-        ERR_(hid_report)("id %d read failed, error: %d %s\n", id, errno, strerror(errno));
-        *read = 0;
-        return STATUS_UNSUCCESSFUL;
+        ERR_(hid_report)("id %d read failed, error: %d %s\n", packet->reportId, errno, strerror(errno));
+        io->Information = 0;
+        io->Status = STATUS_UNSUCCESSFUL;
     }
 #else
-    *read = 0;
-    return STATUS_NOT_IMPLEMENTED;
+    io->Information = 0;
+    io->Status = STATUS_NOT_IMPLEMENTED;
 #endif
 }
 
-static NTSTATUS hidraw_set_feature_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *written)
+static void hidraw_set_feature_report(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
 {
 #if defined(HAVE_LINUX_HIDRAW_H) && defined(HIDIOCSFEATURE)
     struct platform_private* ext = impl_from_DEVICE_OBJECT(device);
+    ULONG length = packet->reportBufferLen;
     BYTE buffer[8192];
     int count = 0;
 
-    if ((buffer[0] = id) && length <= 0x1fff)
-        count = ioctl(ext->device_fd, HIDIOCSFEATURE(length), report);
+    if ((buffer[0] = packet->reportId) && length <= 0x1fff)
+        count = ioctl(ext->device_fd, HIDIOCSFEATURE(length), packet->reportBuffer);
     else if (length > sizeof(buffer) - 1)
-        ERR_(hid_report)("id %d length %u >= 8192, cannot write\n", id, length);
+        ERR_(hid_report)("id %d length %u >= 8192, cannot write\n", packet->reportId, length);
     else
     {
-        memcpy(buffer + 1, report, length);
+        memcpy(buffer + 1, packet->reportBuffer, length);
         count = ioctl(ext->device_fd, HIDIOCSFEATURE(length + 1), buffer);
     }
 
     if (count > 0)
     {
-        *written = count;
-        return STATUS_SUCCESS;
+        io->Information = count;
+        io->Status = STATUS_SUCCESS;
     }
     else
     {
-        ERR_(hid_report)("id %d write failed, error: %d %s\n", id, errno, strerror(errno));
-        *written = 0;
-        return STATUS_UNSUCCESSFUL;
+        ERR_(hid_report)("id %d write failed, error: %d %s\n", packet->reportId, errno, strerror(errno));
+        io->Information = 0;
+        io->Status = STATUS_UNSUCCESSFUL;
     }
 #else
-    *written = 0;
-    return STATUS_NOT_IMPLEMENTED;
+    io->Information = 0;
+    io->Status = STATUS_NOT_IMPLEMENTED;
 #endif
 }
 
@@ -818,9 +820,9 @@ static const platform_vtbl hidraw_vtbl =
 {
     hidraw_free_device,
     compare_platform_device,
+    hidraw_start_device,
     hidraw_get_reportdescriptor,
     hidraw_get_string,
-    begin_report_processing,
     hidraw_set_output_report,
     hidraw_get_feature_report,
     hidraw_set_feature_report,
@@ -852,6 +854,34 @@ static void lnxev_free_device(DEVICE_OBJECT *device)
 
     close(ext->base.device_fd);
     udev_device_unref(ext->base.udev_device);
+}
+
+static DWORD CALLBACK lnxev_device_report_thread(void *args);
+
+static NTSTATUS lnxev_start_device(DEVICE_OBJECT *device)
+{
+    struct wine_input_private *ext = input_impl_from_DEVICE_OBJECT(device);
+    NTSTATUS status;
+
+    if ((status = build_report_descriptor(ext, ext->base.udev_device)))
+        return status;
+
+    if (pipe(ext->base.control_pipe) != 0)
+    {
+        ERR("Control pipe creation failed\n");
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    ext->base.report_thread = CreateThread(NULL, 0, lnxev_device_report_thread, device, 0, NULL);
+    if (!ext->base.report_thread)
+    {
+        ERR("Unable to create device report thread\n");
+        close(ext->base.control_pipe[0]);
+        close(ext->base.control_pipe[1]);
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    return STATUS_SUCCESS;
 }
 
 static NTSTATUS lnxev_get_reportdescriptor(DEVICE_OBJECT *device, BYTE *buffer, DWORD length, DWORD *out_length)
@@ -922,54 +952,30 @@ static DWORD CALLBACK lnxev_device_report_thread(void *args)
     return 0;
 }
 
-static NTSTATUS lnxev_begin_report_processing(DEVICE_OBJECT *device)
+static void lnxev_set_output_report(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
 {
-    struct wine_input_private *private = input_impl_from_DEVICE_OBJECT(device);
-
-    if (private->base.report_thread)
-        return STATUS_SUCCESS;
-
-    if (pipe(private->base.control_pipe) != 0)
-    {
-        ERR("Control pipe creation failed\n");
-        return STATUS_UNSUCCESSFUL;
-    }
-
-    private->base.report_thread = CreateThread(NULL, 0, lnxev_device_report_thread, device, 0, NULL);
-    if (!private->base.report_thread)
-    {
-        ERR("Unable to create device report thread\n");
-        close(private->base.control_pipe[0]);
-        close(private->base.control_pipe[1]);
-        return STATUS_UNSUCCESSFUL;
-    }
-    return STATUS_SUCCESS;
+    io->Information = 0;
+    io->Status = STATUS_NOT_IMPLEMENTED;
 }
 
-static NTSTATUS lnxev_set_output_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *written)
+static void lnxev_get_feature_report(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
 {
-    *written = 0;
-    return STATUS_NOT_IMPLEMENTED;
+    io->Information = 0;
+    io->Status = STATUS_NOT_IMPLEMENTED;
 }
 
-static NTSTATUS lnxev_get_feature_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *read)
+static void lnxev_set_feature_report(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
 {
-    *read = 0;
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-static NTSTATUS lnxev_set_feature_report(DEVICE_OBJECT *device, UCHAR id, BYTE *report, DWORD length, ULONG_PTR *written)
-{
-    *written = 0;
-    return STATUS_NOT_IMPLEMENTED;
+    io->Information = 0;
+    io->Status = STATUS_NOT_IMPLEMENTED;
 }
 
 static const platform_vtbl lnxev_vtbl = {
     lnxev_free_device,
     compare_platform_device,
+    lnxev_start_device,
     lnxev_get_reportdescriptor,
     lnxev_get_string,
-    lnxev_begin_report_processing,
     lnxev_set_output_report,
     lnxev_get_feature_report,
     lnxev_set_feature_report,
@@ -1136,20 +1142,6 @@ static void try_add_device(struct udev_device *dev)
         struct platform_private *private = impl_from_DEVICE_OBJECT(device);
         private->udev_device = udev_device_ref(dev);
         private->device_fd = fd;
-#ifdef HAS_PROPER_INPUT_HEADER
-        if (strcmp(subsystem, "input") == 0)
-            /* FIXME: We should probably move this to IRP_MN_START_DEVICE. */
-            if (build_report_descriptor((struct wine_input_private *)private, dev))
-            {
-                ERR("Building report descriptor failed, removing device\n");
-                close(fd);
-                udev_device_unref(dev);
-                bus_unlink_hid_device(device);
-                bus_remove_hid_device(device);
-                HeapFree(GetProcessHeap(), 0, serial);
-                return;
-            }
-#endif
         IoInvalidateDeviceRelations(bus_pdo, BusRelations);
     }
     else

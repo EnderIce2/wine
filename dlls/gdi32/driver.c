@@ -855,7 +855,6 @@ const struct gdi_dc_funcs null_driver =
     nulldrv_ExtTextOut,                 /* pExtTextOut */
     nulldrv_FillPath,                   /* pFillPath */
     nulldrv_FillRgn,                    /* pFillRgn */
-    nulldrv_FlattenPath,                /* pFlattenPath */
     nulldrv_FontIsLinked,               /* pFontIsLinked */
     nulldrv_FrameRgn,                   /* pFrameRgn */
     nulldrv_GetBoundsRect,              /* pGetBoundsRect */
@@ -903,7 +902,6 @@ const struct gdi_dc_funcs null_driver =
     nulldrv_RoundRect,                  /* pRoundRect */
     nulldrv_SelectBitmap,               /* pSelectBitmap */
     nulldrv_SelectBrush,                /* pSelectBrush */
-    nulldrv_SelectClipPath,             /* pSelectClipPath */
     nulldrv_SelectFont,                 /* pSelectFont */
     nulldrv_SelectPen,                  /* pSelectPen */
     nulldrv_SetBkColor,                 /* pSetBkColor */
@@ -922,7 +920,6 @@ const struct gdi_dc_funcs null_driver =
     nulldrv_StrokeAndFillPath,          /* pStrokeAndFillPath */
     nulldrv_StrokePath,                 /* pStrokePath */
     nulldrv_UnrealizePalette,           /* pUnrealizePalette */
-    nulldrv_WidenPath,                  /* pWidenPath */
     nulldrv_D3DKMTCheckVidPnExclusiveOwnership, /* pD3DKMTCheckVidPnExclusiveOwnership */
     nulldrv_D3DKMTSetVidPnSourceOwner,  /* pD3DKMTSetVidPnSourceOwner */
     nulldrv_wine_get_wgl_driver,        /* wine_get_wgl_driver */

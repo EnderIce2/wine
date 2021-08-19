@@ -1180,7 +1180,16 @@ BOOL EMFDC_GradientFill( DC_ATTR *dc_attr, TRIVERTEX *vert_array, ULONG nvert,
  */
 BOOL CDECL EMFDRV_FillPath( PHYSDEV dev )
 {
-    return emfdrv_stroke_and_fill_path( dev, EMR_FILLPATH );
+    /* FIXME: update bound rect */
+    return TRUE;
+}
+
+/**********************************************************************
+ *	     EMFDC_FillPath
+ */
+BOOL EMFDC_FillPath( DC_ATTR *dc_attr )
+{
+    return emfdrv_stroke_and_fill_path( dc_attr->emf, EMR_FILLPATH );
 }
 
 /**********************************************************************
@@ -1188,7 +1197,16 @@ BOOL CDECL EMFDRV_FillPath( PHYSDEV dev )
  */
 BOOL CDECL EMFDRV_StrokeAndFillPath( PHYSDEV dev )
 {
-    return emfdrv_stroke_and_fill_path( dev, EMR_STROKEANDFILLPATH );
+    /* FIXME: update bound rect */
+    return TRUE;
+}
+
+/**********************************************************************
+ *	     EMFDC_StrokeAndFillPath
+ */
+BOOL EMFDC_StrokeAndFillPath( DC_ATTR *dc_attr )
+{
+    return emfdrv_stroke_and_fill_path( dc_attr->emf, EMR_STROKEANDFILLPATH );
 }
 
 /**********************************************************************
@@ -1196,5 +1214,14 @@ BOOL CDECL EMFDRV_StrokeAndFillPath( PHYSDEV dev )
  */
 BOOL CDECL EMFDRV_StrokePath( PHYSDEV dev )
 {
-    return emfdrv_stroke_and_fill_path( dev, EMR_STROKEPATH );
+    /* FIXME: update bound rect */
+    return TRUE;
+}
+
+/**********************************************************************
+ *           EMFDC_StrokePath
+ */
+BOOL EMFDC_StrokePath( DC_ATTR *dc_attr )
+{
+    return emfdrv_stroke_and_fill_path( dc_attr->emf, EMR_STROKEPATH );
 }

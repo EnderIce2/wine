@@ -3840,7 +3840,6 @@ const struct gdi_dc_funcs font_driver =
     NULL,                           /* pExtTextOut */
     NULL,                           /* pFillPath */
     NULL,                           /* pFillRgn */
-    NULL,                           /* pFlattenPath */
     font_FontIsLinked,              /* pFontIsLinked */
     NULL,                           /* pFrameRgn */
     NULL,                           /* pGetBoundsRect */
@@ -3888,7 +3887,6 @@ const struct gdi_dc_funcs font_driver =
     NULL,                           /* pRoundRect */
     NULL,                           /* pSelectBitmap */
     NULL,                           /* pSelectBrush */
-    NULL,                           /* pSelectClipPath */
     font_SelectFont,                /* pSelectFont */
     NULL,                           /* pSelectPen */
     NULL,                           /* pSetBkColor */
@@ -3907,7 +3905,6 @@ const struct gdi_dc_funcs font_driver =
     NULL,                           /* pStrokeAndFillPath */
     NULL,                           /* pStrokePath */
     NULL,                           /* pUnrealizePalette */
-    NULL,                           /* pWidenPath */
     NULL,                           /* pD3DKMTCheckVidPnExclusiveOwnership */
     NULL,                           /* pD3DKMTSetVidPnSourceOwner */
     NULL,                           /* wine_get_wgl_driver */
@@ -5858,8 +5855,6 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
                               const WCHAR *str, UINT count, const INT *lpDx, DWORD cp )
 {
     BOOL ret = FALSE;
-    LPWSTR reordered_str = (LPWSTR)str;
-    WORD *glyphs = NULL;
     UINT align;
     DWORD layout;
     POINT pt;
@@ -5905,26 +5900,6 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
         if ((align & TA_CENTER) != TA_CENTER) align ^= TA_RIGHT;
         align ^= TA_RTLREADING;
     }
-
-    if( !(flags & (ETO_GLYPH_INDEX | ETO_IGNORELANGUAGE)) && count > 0 )
-    {
-        INT cGlyphs;
-        reordered_str = HeapAlloc(GetProcessHeap(), 0, count*sizeof(WCHAR));
-
-        BIDI_Reorder( hdc, str, count, GCP_REORDER,
-                      (align & TA_RTLREADING) ? WINE_GCPW_FORCE_RTL : WINE_GCPW_FORCE_LTR,
-                      reordered_str, count, NULL, &glyphs, &cGlyphs);
-
-        flags |= ETO_IGNORELANGUAGE;
-        if (glyphs)
-        {
-            flags |= ETO_GLYPH_INDEX;
-            if (cGlyphs != count)
-                count = cGlyphs;
-        }
-    }
-    else if(flags & ETO_GLYPH_INDEX)
-        glyphs = reordered_str;
 
     TRACE("%p, %d, %d, %08x, %s, %s, %d, %p)\n", hdc, x, y, flags,
           wine_dbgstr_rect(lprect), debugstr_wn(str, count), count, lpDx);
@@ -6017,9 +5992,9 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
             INT *dx = HeapAlloc( GetProcessHeap(), 0, count * sizeof(*dx) );
 
             if (flags & ETO_GLYPH_INDEX)
-                GetTextExtentExPointI( hdc, glyphs, count, -1, NULL, dx, &sz );
+                GetTextExtentExPointI( hdc, str, count, -1, NULL, dx, &sz );
             else
-                GetTextExtentExPointW( hdc, reordered_str, count, -1, NULL, dx, &sz );
+                GetTextExtentExPointW( hdc, str, count, -1, NULL, dx, &sz );
 
             deltas[0].x = dx[0];
             deltas[0].y = 0;
@@ -6065,9 +6040,9 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
         POINT desired[2];
 
         if(flags & ETO_GLYPH_INDEX)
-            GetTextExtentPointI(hdc, glyphs, count, &sz);
+            GetTextExtentPointI(hdc, str, count, &sz);
         else
-            GetTextExtentPointW(hdc, reordered_str, count, &sz);
+            GetTextExtentPointW(hdc, str, count, &sz);
         desired[0].x = desired[0].y = 0;
         desired[1].x = sz.cx;
         desired[1].y = 0;
@@ -6155,14 +6130,10 @@ BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lpr
     }
 
     ret = physdev->funcs->pExtTextOut( physdev, x, y, (flags & ~ETO_OPAQUE), &rc,
-                                       glyphs ? glyphs : reordered_str, count, (INT*)deltas );
+                                       str, count, (INT*)deltas );
 
 done:
     HeapFree(GetProcessHeap(), 0, deltas);
-    if(glyphs != reordered_str)
-        HeapFree(GetProcessHeap(), 0, glyphs);
-    if(reordered_str != str)
-        HeapFree(GetProcessHeap(), 0, reordered_str);
 
     if (ret && (lf.lfUnderline || lf.lfStrikeOut))
     {
@@ -7126,187 +7097,6 @@ GetCharacterPlacementA(HDC hdc, LPCSTR lpString, INT uCount,
 
     HeapFree(GetProcessHeap(), 0, lpStringW);
     HeapFree(GetProcessHeap(), 0, resultsW.lpOutString);
-
-    return ret;
-}
-
-static int kern_pair(const KERNINGPAIR *kern, int count, WCHAR c1, WCHAR c2)
-{
-    int i;
-
-    for (i = 0; i < count; i++)
-    {
-        if (kern[i].wFirst == c1 && kern[i].wSecond == c2)
-            return kern[i].iKernAmount;
-    }
-
-    return 0;
-}
-
-static int *kern_string(HDC hdc, const WCHAR *str, int len, int *kern_total)
-{
-    int i, count;
-    KERNINGPAIR *kern = NULL;
-    int *ret;
-
-    *kern_total = 0;
-
-    ret = heap_alloc(len * sizeof(*ret));
-    if (!ret) return NULL;
-
-    count = GetKerningPairsW(hdc, 0, NULL);
-    if (count)
-    {
-        kern = heap_alloc(count * sizeof(*kern));
-        if (!kern)
-        {
-            heap_free(ret);
-            return NULL;
-        }
-
-        GetKerningPairsW(hdc, count, kern);
-    }
-
-    for (i = 0; i < len - 1; i++)
-    {
-        ret[i] = kern_pair(kern, count, str[i], str[i + 1]);
-        *kern_total += ret[i];
-    }
-
-    ret[len - 1] = 0; /* no kerning for last element */
-
-    heap_free(kern);
-    return ret;
-}
-
-/*************************************************************************
- * GetCharacterPlacementW [GDI32.@]
- *
- *   Retrieve information about a string. This includes the width, reordering,
- *   Glyphing and so on.
- *
- * RETURNS
- *
- *   The width and height of the string if successful, 0 if failed.
- *
- * BUGS
- *
- *   All flags except GCP_REORDER are not yet implemented.
- *   Reordering is not 100% compliant to the Windows BiDi method.
- *   Caret positioning is not yet implemented for BiDi.
- *   Classes are not yet implemented.
- *
- */
-DWORD WINAPI
-GetCharacterPlacementW(
-        HDC hdc,                    /* [in] Device context for which the rendering is to be done */
-        LPCWSTR lpString,           /* [in] The string for which information is to be returned */
-        INT uCount,                 /* [in] Number of WORDS in string. */
-        INT nMaxExtent,             /* [in] Maximum extent the string is to take (in HDC logical units) */
-        GCP_RESULTSW *lpResults,    /* [in/out] A pointer to a GCP_RESULTSW struct */
-        DWORD dwFlags               /* [in] Flags specifying how to process the string */
-        )
-{
-    DWORD ret=0;
-    SIZE size;
-    UINT i, nSet;
-    int *kern = NULL, kern_total = 0;
-
-    TRACE("%s, %d, %d, 0x%08x\n",
-          debugstr_wn(lpString, uCount), uCount, nMaxExtent, dwFlags);
-
-    if (!uCount)
-        return 0;
-
-    if (!lpResults)
-        return GetTextExtentPoint32W(hdc, lpString, uCount, &size) ? MAKELONG(size.cx, size.cy) : 0;
-
-    TRACE("lStructSize=%d, lpOutString=%p, lpOrder=%p, lpDx=%p, lpCaretPos=%p\n"
-          "lpClass=%p, lpGlyphs=%p, nGlyphs=%u, nMaxFit=%d\n",
-          lpResults->lStructSize, lpResults->lpOutString, lpResults->lpOrder,
-          lpResults->lpDx, lpResults->lpCaretPos, lpResults->lpClass,
-          lpResults->lpGlyphs, lpResults->nGlyphs, lpResults->nMaxFit);
-
-    if (dwFlags & ~(GCP_REORDER | GCP_USEKERNING))
-        FIXME("flags 0x%08x ignored\n", dwFlags);
-    if (lpResults->lpClass)
-        FIXME("classes not implemented\n");
-    if (lpResults->lpCaretPos && (dwFlags & GCP_REORDER))
-        FIXME("Caret positions for complex scripts not implemented\n");
-
-    nSet = (UINT)uCount;
-    if (nSet > lpResults->nGlyphs)
-        nSet = lpResults->nGlyphs;
-
-    /* return number of initialized fields */
-    lpResults->nGlyphs = nSet;
-
-    if (!(dwFlags & GCP_REORDER))
-    {
-        /* Treat the case where no special handling was requested in a fastpath way */
-        /* copy will do if the GCP_REORDER flag is not set */
-        if (lpResults->lpOutString)
-            memcpy( lpResults->lpOutString, lpString, nSet * sizeof(WCHAR));
-
-        if (lpResults->lpOrder)
-        {
-            for (i = 0; i < nSet; i++)
-                lpResults->lpOrder[i] = i;
-        }
-    }
-    else
-    {
-        BIDI_Reorder(NULL, lpString, uCount, dwFlags, WINE_GCPW_FORCE_LTR, lpResults->lpOutString,
-                     nSet, lpResults->lpOrder, NULL, NULL );
-    }
-
-    if (dwFlags & GCP_USEKERNING)
-    {
-        kern = kern_string(hdc, lpString, nSet, &kern_total);
-        if (!kern)
-        {
-            SetLastError(ERROR_NOT_ENOUGH_MEMORY);
-            return 0;
-        }
-    }
-
-    /* FIXME: Will use the placement chars */
-    if (lpResults->lpDx)
-    {
-        int c;
-        for (i = 0; i < nSet; i++)
-        {
-            if (GetCharWidth32W(hdc, lpString[i], lpString[i], &c))
-            {
-                lpResults->lpDx[i] = c;
-                if (dwFlags & GCP_USEKERNING)
-                    lpResults->lpDx[i] += kern[i];
-            }
-        }
-    }
-
-    if (lpResults->lpCaretPos && !(dwFlags & GCP_REORDER))
-    {
-        int pos = 0;
-
-        lpResults->lpCaretPos[0] = 0;
-        for (i = 0; i < nSet - 1; i++)
-        {
-            if (dwFlags & GCP_USEKERNING)
-                pos += kern[i];
-
-            if (GetTextExtentPoint32W(hdc, &lpString[i], 1, &size))
-                lpResults->lpCaretPos[i + 1] = (pos += size.cx);
-        }
-    }
-
-    if (lpResults->lpGlyphs)
-        GetGlyphIndicesW(hdc, lpString, nSet, lpResults->lpGlyphs, 0);
-
-    if (GetTextExtentPoint32W(hdc, lpString, uCount, &size))
-        ret = MAKELONG(size.cx + kern_total, size.cy);
-
-    heap_free(kern);
 
     return ret;
 }

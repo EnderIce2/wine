@@ -63,7 +63,6 @@ static const struct gdi_dc_funcs emfdrv_driver =
     EMFDRV_ExtTextOut,               /* pExtTextOut */
     EMFDRV_FillPath,                 /* pFillPath */
     EMFDRV_FillRgn,                  /* pFillRgn */
-    EMFDRV_FlattenPath,              /* pFlattenPath */
     NULL,                            /* pFontIsLinked */
     EMFDRV_FrameRgn,                 /* pFrameRgn */
     NULL,                            /* pGetBoundsRect */
@@ -111,13 +110,12 @@ static const struct gdi_dc_funcs emfdrv_driver =
     EMFDRV_RoundRect,                /* pRoundRect */
     EMFDRV_SelectBitmap,             /* pSelectBitmap */
     NULL,                            /* pSelectBrush */
-    EMFDRV_SelectClipPath,           /* pSelectClipPath */
     EMFDRV_SelectFont,               /* pSelectFont */
     NULL,                            /* pSelectPen */
     NULL,                            /* pSetBkColor */
     NULL,                            /* pSetBoundsRect */
-    EMFDRV_SetDCBrushColor,          /* pSetDCBrushColor*/
-    EMFDRV_SetDCPenColor,            /* pSetDCPenColor*/
+    NULL,                            /* pSetDCBrushColor*/
+    NULL,                            /* pSetDCPenColor*/
     EMFDRV_SetDIBitsToDevice,        /* pSetDIBitsToDevice */
     NULL,                            /* pSetDeviceClipping */
     NULL,                            /* pSetDeviceGammaRamp */
@@ -130,7 +128,6 @@ static const struct gdi_dc_funcs emfdrv_driver =
     EMFDRV_StrokeAndFillPath,        /* pStrokeAndFillPath */
     EMFDRV_StrokePath,               /* pStrokePath */
     NULL,                            /* pUnrealizePalette */
-    EMFDRV_WidenPath,                /* pWidenPath */
     NULL,                            /* pD3DKMTCheckVidPnExclusiveOwnership */
     NULL,                            /* pD3DKMTSetVidPnSourceOwner */
     NULL,                            /* wine_get_wgl_driver */

@@ -147,7 +147,9 @@ extern BOOL EMFDC_ExtFloodFill( DC_ATTR *dc_attr, INT x, INT y, COLORREF color,
 extern BOOL EMFDC_ExtSelectClipRgn( DC_ATTR *dc_attr, HRGN hrgn, INT mode ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_ExtTextOut( DC_ATTR *dc_attr, INT x, INT y, UINT flags, const RECT *rect,
                               const WCHAR *str, UINT count, const INT *dx ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_FillPath( DC_ATTR *dc_attr ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_FillRgn( DC_ATTR *dc_attr, HRGN hrgn, HBRUSH hbrush ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_FlattenPath( DC_ATTR *dc_attr ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_FrameRgn( DC_ATTR *dc_attr, HRGN hrgn, HBRUSH hbrush, INT width,
                             INT height ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_GradientFill( DC_ATTR *dc_attr, TRIVERTEX *vert_array, ULONG nvert,
@@ -183,11 +185,14 @@ extern BOOL EMFDC_ScaleViewportExtEx( DC_ATTR *dc_attr, INT x_num, INT x_denom, 
                                       INT y_denom ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_ScaleWindowExtEx( DC_ATTR *dc_attr, INT x_num, INT x_denom, INT y_num,
                                     INT y_denom ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_SelectClipPath( DC_ATTR *dc_attr, INT mode ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SelectObject( DC_ATTR *dc_attr, HGDIOBJ obj ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SelectPalette( DC_ATTR *dc_attr, HPALETTE palette ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetArcDirection( DC_ATTR *dc_attr, INT dir ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetBkColor( DC_ATTR *dc_attr, COLORREF color ) DECLSPEC_HIDDEN;
 extern BOOL EMFDC_SetBkMode( DC_ATTR *dc_attr, INT mode ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_SetDCBrushColor( DC_ATTR *dc_attr, COLORREF color ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_SetDCPenColor( DC_ATTR *dc_attr, COLORREF color ) DECLSPEC_HIDDEN;
 extern INT  EMFDC_SetDIBitsToDevice( DC_ATTR *dc_attr, INT x_dest, INT y_dest, DWORD width,
                                      DWORD height, INT x_src, INT y_src, UINT startscan,
                                      UINT lines, const void *bits, const BITMAPINFO *info,
@@ -214,5 +219,8 @@ extern BOOL EMFDC_StretchDIBits( DC_ATTR *dc_attr, INT x_dst, INT y_dst, INT wid
                                  INT height_dst, INT x_src, INT y_src, INT width_src,
                                  INT height_src, const void *bits, const BITMAPINFO *info,
                                  UINT coloruse, DWORD rop ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_StrokeAndFillPath( DC_ATTR *dc_attr ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_StrokePath( DC_ATTR *dc_attr ) DECLSPEC_HIDDEN;
+extern BOOL EMFDC_WidenPath( DC_ATTR *dc_attr ) DECLSPEC_HIDDEN;
 
 #endif /* __WINE_GDI_PRIVATE_H */

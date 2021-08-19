@@ -22,6 +22,10 @@
 #include "config.h"
 #include <stdarg.h>
 
+#ifdef HAVE_SYS_PARAM_H
+#include <sys/param.h>
+#endif
+
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
@@ -44,6 +48,10 @@
 
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+
+#ifdef HAVE_NETINET_IN_PCB_H
+#include <netinet/in_pcb.h>
 #endif
 
 #ifdef HAVE_NETINET_IP_VAR_H
@@ -230,13 +238,7 @@ static inline MIB_TCP_STATE tcp_state_to_mib_state( int state )
    }
 }
 
-struct ipv6_addr_scope
-{
-    IN6_ADDR addr;
-    DWORD scope;
-};
-
-static struct ipv6_addr_scope *get_ipv6_addr_scope_table( unsigned int *size )
+struct ipv6_addr_scope *get_ipv6_addr_scope_table( unsigned int *size )
 {
     struct ipv6_addr_scope *table = NULL;
     unsigned int table_size = 0, num = 0;
@@ -323,7 +325,7 @@ failed:
     return NULL;
 }
 
-static DWORD find_ipv6_addr_scope( const IN6_ADDR *addr, const struct ipv6_addr_scope *table, unsigned int size )
+DWORD find_ipv6_addr_scope( const IN6_ADDR *addr, const struct ipv6_addr_scope *table, unsigned int size )
 {
     const BYTE multicast_scope_mask = 0x0F;
     const BYTE multicast_scope_shift = 0;
@@ -343,13 +345,7 @@ static DWORD find_ipv6_addr_scope( const IN6_ADDR *addr, const struct ipv6_addr_
     return -1;
 }
 
-struct pid_map
-{
-    unsigned int pid;
-    unsigned int unix_pid;
-};
-
-static struct pid_map *get_pid_map( unsigned int *num_entries )
+struct pid_map *get_pid_map( unsigned int *num_entries )
 {
     struct pid_map *map;
     unsigned int i = 0, buffer_len = 4096, process_count, pos = 0;
@@ -405,7 +401,7 @@ static struct pid_map *get_pid_map( unsigned int *num_entries )
     return map;
 }
 
-static unsigned int find_owning_pid( struct pid_map *map, unsigned int num_entries, UINT_PTR inode )
+unsigned int find_owning_pid( struct pid_map *map, unsigned int num_entries, UINT_PTR inode )
 {
 #ifdef __linux__
     unsigned int i, len_socket;
