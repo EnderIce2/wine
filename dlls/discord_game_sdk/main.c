@@ -1,0 +1,1 @@
+WINE_DEFAULT_DEBUG_CHANNEL(discord_game_sdk);

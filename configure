@@ -838,6 +838,8 @@ PATH_SEPARATOR
 SHELL'
 ac_subst_files=''
 ac_user_opts='
+enable_discord_game_sdk
+enable_discord_rpc
 enable_option_checking
 enable_win16
 enable_win64
@@ -20024,6 +20026,8 @@ ac_config_links="$ac_config_links wine64:tools/winewrapper"
 wine_fn_config_symlink wine64
 fi
 
+wine_fn_config_makefile dlls/discord_game_sdk enable_discord_game_sdk
+wine_fn_config_makefile dlls/discord-rpc enable_discord_rpc
 wine_fn_config_makefile dlls/acledit enable_acledit
 wine_fn_config_makefile dlls/aclui enable_aclui
 wine_fn_config_makefile dlls/activeds.tlb enable_activeds_tlb

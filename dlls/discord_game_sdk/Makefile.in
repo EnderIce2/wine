@@ -1,0 +1,3 @@
+EXTRADLLFLAGS = -m16
+
+C_SRCS = main.c
