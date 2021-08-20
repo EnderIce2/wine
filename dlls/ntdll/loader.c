@@ -1760,6 +1760,12 @@ NTSTATUS WINAPI LdrGetProcedureAddress(HMODULE module, const ANSI_STRING *name,
     DWORD exp_size;
     NTSTATUS ret = STATUS_PROCEDURE_NOT_FOUND;
 
+    if(name && (!strcmp(name->Buffer, "wine_nt_to_unix_file_name") || !strcmp(name->Buffer, "wine_get_unix_file_name")))
+    {
+        FIXME("skipping %s\n", name->Buffer);
+        return ret;
+    }
+
     RtlEnterCriticalSection( &loader_section );
 
     /* check if the module itself is invalid to return the proper error */
@@ -3399,7 +3405,7 @@ void WINAPI LdrShutdownProcess(void)
     process_detach();
 }
 
-extern const char * CDECL wine_get_version(void);
+extern const char * CDECL tuica_get_version(void);
 
 /******************************************************************
  *		RtlExitUserProcess (NTDLL.@)
@@ -3892,11 +3898,11 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, ULONG_PTR unknown2, ULONG_PTR 
     InitializeObjectAttributes( &tuica_event_attr, &tuica_event_string, OBJ_OPENIF, NULL, NULL );
     if (NtCreateEvent( &tuica_event, EVENT_ALL_ACCESS, &tuica_event_attr, NotificationEvent, FALSE ) == STATUS_SUCCESS)
     {
-        FIXME_(tuicadiag)("this is a modified version of wine %s! if you find any problems don't report on winehq forums, instead report it here https://github.com/EnderIce2/wine\n", wine_get_version());
+        FIXME_(tuicadiag)("this is a modified version of wine %s! if you find any problems don't report on winehq forums, instead report it here https://github.com/EnderIce2/wine\n", tuica_get_version());
         FIXME_(tuicadiag)("Please mention your exact version and commit when filing bug reports on https://github.com/EnderIce2/wine/issues\n");
     }
     else
-        WARN_(tuicadiag)("this is a modified version of wine %s! if you find any problems don't report on winehq forums, instead report it here https://github.com/EnderIce2/wine\n", wine_get_version());
+        WARN_(tuicadiag)("this is a modified version of wine %s! if you find any problems don't report on winehq forums, instead report it here https://github.com/EnderIce2/wine\n", tuica_get_version());
 
     RtlAcquirePebLock();
     InsertHeadList( &tls_links, &NtCurrentTeb()->TlsLinks );

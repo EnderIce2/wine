@@ -380,6 +380,15 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
 
     assert( async->status != STATUS_PENDING );  /* it must have been woken up if we get a result */
 
+    if (async->status == STATUS_PENDING)
+    {
+        printf("async->status is STATUS_PENDING\n");
+    }
+    else
+    {
+        printf("async->status is not STATUS_PENDING\n");
+    }
+
     if (status == STATUS_PENDING)  /* restart it */
     {
         status = async->status;

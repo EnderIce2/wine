@@ -904,7 +904,8 @@ static union fd_cache_entry fd_cache_initial_block[FD_CACHE_BLOCK_SIZE];
 
 static inline unsigned int handle_to_index( HANDLE handle, unsigned int *entry )
 {
-    unsigned int idx = (wine_server_obj_handle(handle) >> 2) - 1;
+    // unsigned int idx = (wine_server_obj_handle(handle) >> 2) - 1;
+    unsigned int idx = ((wine_server_obj_handle(handle) & ~KERNEL_HANDLE_FLAG) >> 2) - 1;
     *entry = idx / FD_CACHE_BLOCK_SIZE;
     return idx % FD_CACHE_BLOCK_SIZE;
 }
@@ -1445,6 +1446,7 @@ size_t server_init_process(void)
     int ret, reply_pipe;
     struct sigaction sig_act;
     size_t info_size;
+    HANDLE processed_event;
     DWORD pid, tid;
 
     server_pid = -1;
@@ -1568,6 +1570,7 @@ void server_init_process_done(void)
     void *entry, *teb;
     NTSTATUS status;
     int suspend, needs_close, unixdir;
+    HANDLE processed_event;
 
     if (peb->ProcessParameters->CurrentDirectory.Handle &&
         !server_get_unix_fd( peb->ProcessParameters->CurrentDirectory.Handle,
@@ -1603,10 +1606,16 @@ void server_init_process_done(void)
         status = wine_server_call( req );
         suspend = reply->suspend;
         entry = wine_server_get_ptr( reply->entry );
+        processed_event = wine_server_ptr_handle(reply->processed_event);
     }
     SERVER_END_REQ;
 
     assert( !status );
+    if (processed_event)
+    {
+        NtWaitForSingleObject(processed_event, FALSE, NULL);
+        NtClose(processed_event);
+    }
     signal_start_thread( entry, peb, suspend, NtCurrentTeb() );
 }
 
@@ -1619,6 +1628,7 @@ void server_init_process_done(void)
 void server_init_thread( void *entry_point, BOOL *suspend )
 {
     void *teb;
+    HANDLE processed_event;
     int reply_pipe = init_thread_pipe();
 
     /* always send the native TEB */
@@ -1633,6 +1643,7 @@ void server_init_thread( void *entry_point, BOOL *suspend )
         req->wait_fd   = ntdll_get_thread_data()->wait_fd[1];
         wine_server_call( req );
         *suspend = reply->suspend;
+        processed_event = reply->processed_event;
     }
     SERVER_END_REQ;
     close( reply_pipe );

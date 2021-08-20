@@ -47,7 +47,7 @@ struct reply_header
 
 struct request_max_size
 {
-    int pad[16];
+    int pad[18];
 };
 
 #define FIRST_USER_HANDLE 0x0020
@@ -100,6 +100,7 @@ typedef union
         int          dbg_offset;
         int          dbg_size;
         client_ptr_t name;
+        obj_handle_t processed_event;
     } load_dll;
     struct
     {
@@ -471,7 +472,9 @@ enum apc_type
     APC_UNMAP_VIEW,
     APC_CREATE_THREAD,
     APC_DUP_HANDLE,
-    APC_BREAK_PROCESS
+    APC_BREAK_PROCESS,
+    APC_REAL_USER,
+    APC_REAL_KERNEL,
 };
 
 typedef struct
@@ -579,6 +582,11 @@ typedef union
         unsigned int     attributes;
         unsigned int     options;
     } dup_handle;
+    struct
+    {
+        enum apc_type    type;
+        int special_apc;
+    } real_apc;
 } apc_call_t;
 
 typedef union
@@ -913,7 +921,7 @@ struct init_process_done_reply
     struct reply_header __header;
     client_ptr_t entry;
     int          suspend;
-    char __pad_20[4];
+    obj_handle_t processed_event;
 };
 
 
@@ -935,7 +943,9 @@ struct init_first_thread_reply
     timeout_t    server_start;
     unsigned int session_id;
     data_size_t  info_size;
+    obj_handle_t processed_event;
     /* VARARG(machines,ushorts); */
+    char __pad_36[4];
 };
 
 
@@ -953,7 +963,7 @@ struct init_thread_reply
 {
     struct reply_header __header;
     int          suspend;
-    char __pad_12[4];
+    obj_handle_t processed_event;
 };
 
 
@@ -1147,6 +1157,22 @@ struct set_thread_info_reply
 #define SET_THREAD_INFO_DBG_HIDDEN  0x20
 
 
+struct get_dll_info_request
+{
+    struct request_header __header;
+    obj_handle_t handle;
+    mod_handle_t base_address;
+};
+struct get_dll_info_reply
+{
+    struct reply_header __header;
+    client_ptr_t entry_point;
+    mod_handle_t base_address;
+    data_size_t  filename_len;
+    /* VARARG(filename,unicode_str); */
+    char __pad_28[4];
+};
+
 
 struct suspend_thread_request
 {
@@ -1189,6 +1215,16 @@ struct queue_apc_reply
     int          self;
 };
 
+struct finalize_apc_request
+{
+    struct request_header __header;
+    obj_handle_t handle;
+    apc_call_t   call;
+};
+struct finalize_apc_reply
+{
+    struct reply_header __header;
+};
 
 
 struct get_apc_result_request
@@ -1202,6 +1238,7 @@ struct get_apc_result_reply
     apc_result_t result;
 };
 
+#define KERNEL_HANDLE_FLAG 0x8000000
 
 
 struct close_handle_request
@@ -1993,6 +2030,20 @@ struct unmap_view_request
 struct unmap_view_reply
 {
     struct reply_header __header;
+};
+
+
+struct get_mapping_file_request
+{
+    struct request_header __header;
+    obj_handle_t process;
+    client_ptr_t addr;
+};
+struct get_mapping_file_reply
+{
+    struct reply_header __header;
+    obj_handle_t handle;
+    char __pad_12[4];
 };
 
 
@@ -4943,7 +4994,7 @@ struct get_kernel_object_handle_request
     obj_handle_t manager;
     client_ptr_t user_ptr;
     unsigned int access;
-    char __pad_28[4];
+    unsigned int attributes;
 };
 struct get_kernel_object_handle_reply
 {
@@ -4952,6 +5003,93 @@ struct get_kernel_object_handle_reply
     char __pad_12[4];
 };
 
+
+struct callback_subscribe_request
+{
+    struct request_header __header;
+    obj_handle_t manager;
+    int callback_mask;
+    char __pad_20[4];
+};
+struct callback_subscribe_reply
+{
+    struct reply_header __header;
+};
+
+enum operation_type { CREATE_PROC, DUP_PROC, CREATE_THRD, DUP_THRD };
+
+typedef union
+{
+    int cb_type;
+    struct
+    {
+        int cb_type;
+        int create;
+        process_id_t pid;
+        process_id_t ppid;
+    } process_life;
+    struct
+    {
+        int cb_type;
+        int create;
+        process_id_t pid;
+        thread_id_t tid;
+    } thread_life;
+    struct
+    {
+        int cb_type;
+        process_id_t pid;
+        client_ptr_t base;
+        mem_size_t size;
+    } image_life;
+    struct
+    {
+        int cb_type;
+        enum operation_type op_type;
+        unsigned int access;
+        unsigned int status;
+        process_id_t source_pid;
+        process_id_t target_pid;
+        obj_handle_t object;
+        unsigned int padding;
+    } handle_event;
+} krnl_cbdata_t;
+
+enum kernel_callback_type
+{
+    SERVER_CALLBACK_PROC_LIFE = 0x1,
+    SERVER_CALLBACK_THRD_LIFE = 0x2,
+    SERVER_CALLBACK_IMAGE_LIFE = 0x4,
+    SERVER_CALLBACK_HANDLE_EVENT = 0x8
+};
+
+struct get_next_callback_event_request
+{
+    struct request_header __header;
+    obj_handle_t manager;
+};
+struct get_next_callback_event_reply
+{
+    struct reply_header __header;
+    krnl_cbdata_t cb_data;
+    thread_id_t   client_tid;
+    char __pad_44[4];
+    client_ptr_t  client_thread;
+    /* VARARG(string_paramenter,unicode_str); */
+};
+
+struct attach_process_request
+{
+    struct request_header __header;
+    obj_handle_t manager;
+    client_ptr_t process;
+    int detach;
+    char __pad_28[4];
+};
+struct attach_process_reply
+{
+    struct reply_header __header;
+};
 
 
 struct make_process_system_request
@@ -5496,9 +5634,11 @@ enum request
     REQ_get_thread_info,
     REQ_get_thread_times,
     REQ_set_thread_info,
+    REQ_get_dll_info,
     REQ_suspend_thread,
     REQ_resume_thread,
     REQ_queue_apc,
+    REQ_finalize_apc,
     REQ_get_apc_result,
     REQ_close_handle,
     REQ_set_handle_info,
@@ -5547,6 +5687,7 @@ enum request
     REQ_get_mapping_info,
     REQ_map_view,
     REQ_unmap_view,
+    REQ_get_mapping_file,
     REQ_get_mapping_committed_range,
     REQ_add_mapping_committed_range,
     REQ_is_same_mapping,
@@ -5723,6 +5864,9 @@ enum request
     REQ_grab_kernel_object,
     REQ_release_kernel_object,
     REQ_get_kernel_object_handle,
+    REQ_callback_subscribe,
+    REQ_get_next_callback_event,
+    REQ_attach_process,
     REQ_make_process_system,
     REQ_get_token_info,
     REQ_create_linked_token,
@@ -5781,9 +5925,11 @@ union generic_request
     struct get_thread_info_request get_thread_info_request;
     struct get_thread_times_request get_thread_times_request;
     struct set_thread_info_request set_thread_info_request;
+    struct get_dll_info_request get_dll_info_request;
     struct suspend_thread_request suspend_thread_request;
     struct resume_thread_request resume_thread_request;
     struct queue_apc_request queue_apc_request;
+    struct finalize_apc_request finalize_apc_request;
     struct get_apc_result_request get_apc_result_request;
     struct close_handle_request close_handle_request;
     struct set_handle_info_request set_handle_info_request;
@@ -5832,6 +5978,7 @@ union generic_request
     struct get_mapping_info_request get_mapping_info_request;
     struct map_view_request map_view_request;
     struct unmap_view_request unmap_view_request;
+    struct get_mapping_file_request get_mapping_file_request;
     struct get_mapping_committed_range_request get_mapping_committed_range_request;
     struct add_mapping_committed_range_request add_mapping_committed_range_request;
     struct is_same_mapping_request is_same_mapping_request;
@@ -6008,6 +6155,9 @@ union generic_request
     struct grab_kernel_object_request grab_kernel_object_request;
     struct release_kernel_object_request release_kernel_object_request;
     struct get_kernel_object_handle_request get_kernel_object_handle_request;
+    struct callback_subscribe_request callback_subscribe_request;
+    struct get_next_callback_event_request get_next_callback_event_request;
+    struct attach_process_request attach_process_request;
     struct make_process_system_request make_process_system_request;
     struct get_token_info_request get_token_info_request;
     struct create_linked_token_request create_linked_token_request;
@@ -6064,9 +6214,11 @@ union generic_reply
     struct get_thread_info_reply get_thread_info_reply;
     struct get_thread_times_reply get_thread_times_reply;
     struct set_thread_info_reply set_thread_info_reply;
+    struct get_dll_info_reply get_dll_info_reply;
     struct suspend_thread_reply suspend_thread_reply;
     struct resume_thread_reply resume_thread_reply;
     struct queue_apc_reply queue_apc_reply;
+    struct finalize_apc_reply finalize_apc_reply;
     struct get_apc_result_reply get_apc_result_reply;
     struct close_handle_reply close_handle_reply;
     struct set_handle_info_reply set_handle_info_reply;
@@ -6115,6 +6267,7 @@ union generic_reply
     struct get_mapping_info_reply get_mapping_info_reply;
     struct map_view_reply map_view_reply;
     struct unmap_view_reply unmap_view_reply;
+    struct get_mapping_file_reply get_mapping_file_reply;
     struct get_mapping_committed_range_reply get_mapping_committed_range_reply;
     struct add_mapping_committed_range_reply add_mapping_committed_range_reply;
     struct is_same_mapping_reply is_same_mapping_reply;
@@ -6291,6 +6444,9 @@ union generic_reply
     struct grab_kernel_object_reply grab_kernel_object_reply;
     struct release_kernel_object_reply release_kernel_object_reply;
     struct get_kernel_object_handle_reply get_kernel_object_handle_reply;
+    struct callback_subscribe_reply callback_subscribe_reply;
+    struct get_next_callback_event_reply get_next_callback_event_reply;
+    struct attach_process_reply attach_process_reply;
     struct make_process_system_reply make_process_system_reply;
     struct get_token_info_reply get_token_info_reply;
     struct create_linked_token_reply create_linked_token_reply;
@@ -6329,7 +6485,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 726
+#define SERVER_PROTOCOL_VERSION 730
 
 /* ### protocol_version end ### */
 

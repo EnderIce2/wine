@@ -229,7 +229,7 @@ static void do_sigchld( int signum )
 /* SIGSEGV handler */
 static void do_sigsegv( int signum )
 {
-    fprintf( stderr, "wineserver crashed, please enable coredumps (ulimit -c unlimited) and restart.\n");
+    fprintf( stderr, "Ah snap! wineserver crashed, please enable coredumps (ulimit -c unlimited) and restart.\n");
     abort();
 }
 

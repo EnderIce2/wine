@@ -34,6 +34,7 @@
 #include "winternl.h"
 #include "ddk/wdm.h"
 
+#include "device.h"
 #include "object.h"
 #include "file.h"
 #include "handle.h"
@@ -87,12 +88,27 @@ static const struct object_ops irp_call_ops =
 
 /* device manager (a list of devices managed by the same client process) */
 
+struct callback_entry
+{
+    struct list entry;
+    krnl_cbdata_t data;
+    struct thread *client_thread;
+    struct unicode_str string_param;
+    struct callback_event *event;
+};
+
 struct device_manager
 {
     struct object          obj;            /* object header */
+    struct list            entry;          /* entry in global list of device managers */
     struct list            devices;        /* list of devices */
     struct list            requests;       /* list of pending irps across all devices */
+    int                    callback_mask;  /* mask of which callbacks we accept */
+    struct list            callbacks;      /* list of pending callbacks */
     struct irp_call       *current_call;   /* call currently executed on client side */
+    struct thread         *current_cb_client;
+    struct callback_event *current_cb_event;
+    struct thread         *main_loop_thread;
     struct wine_rb_tree    kernel_objects; /* map of objects that have client side pointer associated */
 };
 
@@ -248,6 +264,41 @@ static const struct fd_ops device_file_fd_ops =
     device_file_reselect_async        /* reselect_async */
 };
 
+/* callback event (an event signaled when the callback has been processed by every device manager) */
+
+struct callback_event{
+    struct object obj;
+    unsigned int remaining_count;
+};
+
+static void callback_event_dump( struct object *obj, int verbose );
+static int callback_event_signaled( struct object *obj, struct wait_queue_entry *entry );
+static void callback_event_destroy( struct object *obj );
+
+static const struct object_ops callback_event_ops =
+{
+    sizeof(struct object_ops),
+    callback_event_dump,
+    no_get_type,
+    add_queue,
+    remove_queue,
+    callback_event_signaled,
+    NULL,
+    no_satisfied,
+    no_signal,
+    no_get_fd,
+    no_map_access,
+    default_get_sd,
+    default_set_sd,
+    no_lookup_name,
+    no_link_name,
+    NULL,
+    no_open_file,
+    no_kernel_obj_list,
+    no_alloc_handle,
+    no_close_handle,
+    callback_event_destroy
+};
 
 struct list *no_kernel_obj_list( struct object *obj )
 {
@@ -803,7 +854,7 @@ static int device_manager_signaled( struct object *obj, struct wait_queue_entry 
 {
     struct device_manager *manager = (struct device_manager *)obj;
 
-    return !list_empty( &manager->requests );
+    return !list_empty( &manager->requests ) || !list_empty( &manager->callbacks);
 }
 
 static void device_manager_destroy( struct object *obj )
@@ -812,10 +863,26 @@ static void device_manager_destroy( struct object *obj )
     struct kernel_object *kernel_object;
     struct list *ptr;
 
+    list_remove(&manager->entry);
+    if (current)
+        current->process->dev_mgr = NULL;
+
     if (manager->current_call)
     {
         release_object( manager->current_call );
         manager->current_call = NULL;
+    }
+
+    if (manager->current_cb_client)
+    {
+        release_object( manager->current_cb_client );
+        manager->current_cb_client = NULL;
+    }
+
+    if (manager->main_loop_thread)
+    {
+        release_object (manager->main_loop_thread );
+        manager->main_loop_thread = NULL;
     }
 
     while (manager->kernel_objects.root)
@@ -840,7 +907,16 @@ static void device_manager_destroy( struct object *obj )
         assert( !irp->file && !irp->async );
         release_object( irp );
     }
+
+    while ((ptr = list_head( &manager->callbacks )))
+    {
+        struct callback_entry *entry = LIST_ENTRY( ptr, struct callback_entry, entry );
+        list_remove( &entry->entry );
+        free(entry);
+    }
 }
+
+static struct list device_managers = LIST_INIT( device_managers );
 
 static struct device_manager *create_device_manager(void)
 {
@@ -849,8 +925,14 @@ static struct device_manager *create_device_manager(void)
     if ((manager = alloc_object( &device_manager_ops )))
     {
         manager->current_call = NULL;
+        manager->current_cb_client = NULL;
+        manager->main_loop_thread = (struct thread *)grab_object(current);
         list_init( &manager->devices );
         list_init( &manager->requests );
+        list_init( &manager->callbacks );
+        list_add_tail(&device_managers, &manager->entry);
+        manager->callback_mask = 0;
+        manager->current_cb_event = NULL;
         wine_rb_init( &manager->kernel_objects, compare_kernel_object );
     }
     return manager;
@@ -886,14 +968,40 @@ void free_kernel_objects( struct object *obj )
     }
 }
 
+static void callback_event_dump( struct object *obj, int verbose )
+{
+    struct callback_event *se = (struct callback_event *)obj;
+    assert( obj->ops == &callback_event_ops );
+
+    fprintf( stderr, "Callback event remaining=%u\n", se->remaining_count);
+}
+
+static int callback_event_signaled( struct object *obj, struct wait_queue_entry *entry )
+{
+    struct callback_event *se = (struct callback_event *)obj;
+    assert( obj->ops == &callback_event_ops );
+    return se->remaining_count == 0;
+}
+
+static void callback_event_destroy( struct object *obj )
+{
+    assert( obj->ops == &callback_event_ops );
+}
 
 /* create a device manager */
 DECL_HANDLER(create_device_manager)
 {
-    struct device_manager *manager = create_device_manager();
+    struct device_manager *manager;
 
-    if (manager)
+    if (current->process->dev_mgr)
     {
+        set_error(STATUS_CONFLICTING_ADDRESSES);
+        return;
+    }
+
+    if ((manager = create_device_manager()))
+    {
+        current->process->dev_mgr = manager;
         reply->handle = alloc_handle( current->process, manager, req->access, req->attributes );
         release_object( manager );
     }
@@ -967,6 +1075,21 @@ DECL_HANDLER(get_next_device_request)
     if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
                                                              0, &device_manager_ops )))
         return;
+
+    if (current->attached_process)
+    {
+        release_object(current->attached_process);
+        current->attached_process = NULL;
+    }
+
+    if (manager->current_cb_event)
+    {
+        manager->current_cb_event->remaining_count--;
+        if (!manager->current_cb_event->remaining_count)
+            wake_up(&manager->current_cb_event->obj, 0);
+        release_object(manager->current_cb_event);
+        manager->current_cb_event = NULL;
+    }
 
     if (req->prev) close_handle( current->process, req->prev );  /* avoid an extra round-trip for close */
 
@@ -1141,9 +1264,286 @@ DECL_HANDLER(get_kernel_object_handle)
         return;
 
     if ((ref = kernel_object_from_ptr( manager, req->user_ptr )))
-        reply->handle = alloc_handle( current->process, ref->object, req->access, 0 );
+    {
+        if (req->attributes & OBJ_KERNEL_HANDLE)
+            reply->handle = alloc_handle( current->process, ref->object, req->access, 0 );
+        else
+        {
+            struct thread *client_thread;
+            struct process *user_process = NULL;
+
+            if (current->attached_process)
+            {
+                user_process = current->attached_process;
+            }
+            else if ((client_thread = device_manager_client_thread(manager, current)))
+            {
+                user_process = client_thread->process;
+                release_object(client_thread);
+            }
+            else
+                set_error(STATUS_INVALID_PARAMETER);
+
+            if (user_process)
+                reply->handle = alloc_handle( user_process, ref->object, req->access, req->attributes );
+        }
+    }
     else
         set_error( STATUS_INVALID_HANDLE );
 
     release_object( manager );
+}
+
+
+DECL_HANDLER(callback_subscribe)
+{
+    struct device_manager *manager;
+    if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
+                                                            0, &device_manager_ops )))
+    return;
+
+    manager->callback_mask = req->callback_mask;
+}
+
+struct object *get_handle_event_object(krnl_cbdata_t *cb)
+{
+    if (cb->cb_type == SERVER_CALLBACK_HANDLE_EVENT)
+    {
+        struct object *obj;
+        if ((obj = (struct object *) ((unsigned long int) cb->handle_event.object << 32 | cb->handle_event.padding)))
+            return obj;
+    }
+    return NULL;
+}
+
+krnl_cbdata_t grab_cbdata(krnl_cbdata_t *cb)
+{
+    krnl_cbdata_t ret = *cb;
+    struct object *obj;
+    if ((obj = get_handle_event_object(cb)))
+        grab_object(obj);
+    return ret;
+}
+
+void free_cbdata(krnl_cbdata_t *cb)
+{
+    if (cb->cb_type == SERVER_CALLBACK_HANDLE_EVENT)
+    {
+        struct object *obj;
+        if ((obj = (struct object *) ((unsigned long int) cb->handle_event.object << 32 | cb->handle_event.padding)))
+            release_object(obj);
+    }
+}
+
+struct callback_entry* allocate_callback_entry(krnl_cbdata_t *cb, struct unicode_str *string_param, struct callback_event *event)
+{
+    struct callback_entry *entry;
+
+    if (!(entry = malloc(sizeof(*entry))))
+        return NULL;
+
+    entry->data = grab_cbdata(cb);
+    entry->client_thread = current ? (struct thread *)grab_object(current) : NULL;
+    if (string_param)
+    {
+        entry->string_param.str = memdup(string_param->str, string_param->len);
+        entry->string_param.len = string_param->len;
+    }
+    else
+        entry->string_param.str = NULL;
+
+    entry->event = (struct callback_event *)grab_object(event);
+    event->remaining_count++;
+
+    return entry;
+}
+
+struct callback_entry* copy_callback_entry(struct callback_entry *source)
+{
+    struct callback_entry *dest;
+
+    if (!(dest = malloc(sizeof(*dest))))
+        return NULL;
+
+    memcpy(dest, source, sizeof(*dest));
+    grab_cbdata(&dest->data);
+    if (source->string_param.str)
+        dest->string_param.str = memdup(source->string_param.str, source->string_param.len);
+
+    return dest;
+}
+
+void free_callback_entry(struct callback_entry *entry)
+{
+    free_cbdata(&entry->data);
+    if (entry->string_param.str)
+        free(entry->string_param.str);
+    free(entry);
+}
+
+static int is_extending;
+void queue_callback(krnl_cbdata_t *cb, struct unicode_str *string_param, struct object **done_event)
+{
+    // TODO: !! THIS IS CAUSING A WINESERVER CRASH! !!
+    // struct device_manager *manager;
+    // struct callback_event *event;
+
+    // if (is_extending || (current && current->process->is_kernel))
+    //     goto done;
+
+    // event = alloc_object( &callback_event_ops );
+    // if (event)
+    //     event->remaining_count = 0;
+
+    // LIST_FOR_EACH_ENTRY(manager, &device_managers, struct device_manager, entry)
+    // {
+    //     struct callback_entry *entry;
+
+    //     if (!(manager->callback_mask & cb->cb_type))
+    //         continue;
+
+    //     if (!(entry = allocate_callback_entry(cb, string_param, event)))
+    //         break;
+
+    //     list_add_tail(&manager->callbacks, &entry->entry);
+    //     if (list_head( &manager->callbacks ) == &entry->entry) wake_up( &manager->obj, 0 );
+    // }
+
+    // if (event)
+    // {
+    //     if (done_event && event->remaining_count != 0)
+    //         *done_event = (struct object *)event;
+    //     else
+    //         release_object( event );
+    // }
+
+    // done:
+    // free_cbdata(cb);
+}
+
+DECL_HANDLER(get_next_callback_event)
+{
+    struct device_manager *manager;
+    struct list *ptr;
+
+    if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
+                                                             0, &device_manager_ops )))
+        return;
+
+    if (current->attached_process)
+    {
+        release_object(current->attached_process);
+        current->attached_process = NULL;
+    }
+
+    if ((ptr = list_head( &manager->callbacks )))
+    {
+        struct callback_entry *cb = LIST_ENTRY( ptr, struct callback_entry, entry );
+
+        reply->cb_data = cb->data;
+
+        if (manager->current_cb_client)
+        {
+            release_object(manager->current_cb_client);
+            manager->current_cb_client = NULL;
+        }
+        if (manager->current_cb_event)
+        {
+            manager->current_cb_event->remaining_count--;
+            if (!manager->current_cb_event->remaining_count)
+                wake_up(&manager->current_cb_event->obj, 0);
+            release_object(manager->current_cb_event);
+            manager->current_cb_event = NULL;
+        }
+        if (cb->client_thread)
+        {
+            reply->client_thread = get_kernel_object_ptr( manager, &cb->client_thread->obj );
+            reply->client_tid = cb->client_thread->id;
+            manager->current_cb_client = cb->client_thread;
+        }
+        else
+            reply->client_tid = 0;
+        if (reply->cb_data.cb_type == SERVER_CALLBACK_HANDLE_EVENT)
+        {
+            struct object *obj;
+            if ((obj = (struct object *) ((unsigned long int) reply->cb_data.handle_event.object << 32 | reply->cb_data.handle_event.padding)))
+            {
+                is_extending = 1;
+                reply->cb_data.handle_event.object = alloc_handle_no_access_check(current->process, obj, MAXIMUM_ALLOWED, 0);
+                is_extending = 0;
+                release_object(obj);
+            }
+            else
+                reply->cb_data.handle_event.object = 0;
+        }
+        if (cb->string_param.str)
+        {
+            set_reply_data( cb->string_param.str, min( cb->string_param.len, get_reply_max_size() ) );
+            free(cb->string_param.str);
+        }
+        manager->current_cb_event = cb->event;
+        list_remove(ptr);
+        free(cb);
+    }
+    else set_error( STATUS_PENDING );
+
+    release_object( manager );
+}
+
+struct thread *device_manager_client_thread(struct device_manager *dev_mgr, struct thread *thread)
+{
+    if (thread != dev_mgr->main_loop_thread)
+        return NULL;
+    return dev_mgr->current_call ? (struct thread *)grab_object((struct object *) dev_mgr->current_call->thread) :
+           dev_mgr->current_cb_client ?(struct thread *)grab_object((struct object *) dev_mgr->current_cb_client) :  NULL;
+}
+
+DECL_HANDLER(attach_process)
+{
+    struct device_manager *manager;
+    struct process *process;
+    struct kernel_object *ref;
+    struct thread *client_thread;
+    struct process *current_process;
+
+    if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
+                                                             0, &device_manager_ops )))
+        return;
+
+    if ((client_thread = device_manager_client_thread(manager, current)))\
+    {
+        current_process = client_thread->process;
+        release_object(client_thread);
+    }
+    else
+        current_process = current->process;
+
+    if (!(ref = kernel_object_from_ptr( manager, req->process )))
+    {
+        set_error( STATUS_INVALID_PARAMETER );
+        release_object(manager);
+        return;
+    }
+
+    process = (struct process *)ref->object;
+    release_object(manager);
+
+    if (!(is_process(&process->obj)))
+    {
+        set_error( STATUS_OBJECT_TYPE_MISMATCH );
+        return;
+    }
+
+    grab_object(process);
+
+    if (current->attached_process)
+    {
+        release_object(current->attached_process);
+        current->attached_process = NULL;
+    }
+
+    if (req->detach && process == current_process)
+        release_object(process);
+    else
+        current->attached_process = process;
 }

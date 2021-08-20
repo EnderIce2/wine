@@ -40,7 +40,7 @@ TuicaDlgProc (HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     static const WCHAR openW[] = {'o','p','e','n',0};
     static const WCHAR tahomaW[] = {'T','a','h','o','m','a',0};
-    const char * (CDECL *wine_get_version)(void);
+    const char * (CDECL *tuica_get_version)(void);
     HWND hWnd;
     HDC hDC;
     RECT rcClient, rcRect;
@@ -112,8 +112,8 @@ TuicaDlgProc (HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
                                  0, 0, 0, 0, FALSE, 0, 0, 0, 0, 0, 0, 0, tahomaW );
         SendDlgItemMessageW(hDlg, IDC_ABT_TITLE_TEXT, WM_SETFONT, (WPARAM)titleFont, TRUE);
 
-        wine_get_version = (void *)GetProcAddress( GetModuleHandleA("ntdll.dll"), "wine_get_version" );
-        if (wine_get_version) SetDlgItemTextA(hDlg, IDC_ABT_PANEL_TEXT, wine_get_version());
+        tuica_get_version = (void *)GetProcAddress( GetModuleHandleA("ntdll.dll"), "tuica_get_version" );
+        if (tuica_get_version) SetDlgItemTextA(hDlg, IDC_ABT_PANEL_TEXT, tuica_get_version());
 
         ReleaseDC(hDlg, hDC);
 

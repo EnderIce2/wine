@@ -920,12 +920,12 @@ static INT_PTR CALLBACK AboutDlgProc( HWND hWnd, UINT msg, WPARAM wParam,
         {
             ABOUT_INFO *info = (ABOUT_INFO *)lParam;
             WCHAR template[512], buffer[512], version[64];
-            const char *(CDECL *wine_get_build_id)(void);
+            const char *(CDECL *tuica_get_build_id)(void);
 
             if (info)
             {
-                wine_get_build_id = (void *)GetProcAddress( GetModuleHandleA("ntdll.dll"),
-                                                            "wine_get_build_id");
+                tuica_get_build_id = (void *)GetProcAddress( GetModuleHandleA("ntdll.dll"),
+                                                            "tuica_get_build_id");
                 SendDlgItemMessageW(hWnd, stc1, STM_SETICON,(WPARAM)info->hIcon, 0);
                 GetWindowTextW( hWnd, template, ARRAY_SIZE(template) );
                 sprintfW( buffer, template, info->szApp );
@@ -934,9 +934,9 @@ static INT_PTR CALLBACK AboutDlgProc( HWND hWnd, UINT msg, WPARAM wParam,
                 SetWindowTextW( GetDlgItem(hWnd, IDC_ABOUT_STATIC_TEXT2), info->szOtherStuff );
                 GetWindowTextW( GetDlgItem(hWnd, IDC_ABOUT_STATIC_TEXT3),
                                 template, ARRAY_SIZE(template) );
-                if (wine_get_build_id)
+                if (tuica_get_build_id)
                 {
-                    MultiByteToWideChar( CP_UTF8, 0, wine_get_build_id(), -1, version, ARRAY_SIZE(version) );
+                    MultiByteToWideChar( CP_UTF8, 0, tuica_get_build_id(), -1, version, ARRAY_SIZE(version) );
                     sprintfW( buffer, template, version );
                     SetWindowTextW( GetDlgItem(hWnd, IDC_ABOUT_STATIC_TEXT3), buffer );
                 }

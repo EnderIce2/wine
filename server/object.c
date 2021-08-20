@@ -506,6 +506,20 @@ struct namespace *create_namespace( unsigned int hash_size )
 
 /* functions for unimplemented/default object operations */
 
+struct object_type *no_get_type( struct object *obj )
+{
+    return NULL;
+}
+
+unsigned int no_map_access( struct object *obj, unsigned int access )
+{
+    if (access & GENERIC_READ)    access |= STANDARD_RIGHTS_READ;
+    if (access & GENERIC_WRITE)   access |= STANDARD_RIGHTS_WRITE;
+    if (access & GENERIC_EXECUTE) access |= STANDARD_RIGHTS_EXECUTE;
+    if (access & GENERIC_ALL)     access |= STANDARD_RIGHTS_ALL;
+    return access & ~(GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE | GENERIC_ALL);
+}
+
 int no_add_queue( struct object *obj, struct wait_queue_entry *entry )
 {
     set_error( STATUS_OBJECT_TYPE_MISMATCH );
@@ -698,6 +712,10 @@ struct object *no_open_file( struct object *obj, unsigned int access, unsigned i
 {
     set_error( STATUS_OBJECT_TYPE_MISMATCH );
     return NULL;
+}
+
+void no_alloc_handle( struct object *obj, struct process *process, obj_handle_t handle )
+{
 }
 
 int no_close_handle( struct object *obj, struct process *process, obj_handle_t handle )

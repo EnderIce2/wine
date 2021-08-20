@@ -1247,6 +1247,36 @@ done:
     release_object( mapping );
 }
 
+
+/* get file handle from mapping by address */
+DECL_HANDLER(get_mapping_file)
+{
+    struct memory_view *view;
+    struct process *process;
+    struct file *file;
+
+    if (!(process = get_process_from_handle( req->process, 0 ))) return;
+
+    LIST_FOR_EACH_ENTRY( view, &process->views, struct memory_view, entry )
+        if (req->addr >= view->base && req->addr < view->base + view->size) break;
+
+    if (&view->entry == &process->views)
+    {
+        set_error( STATUS_NOT_MAPPED_VIEW );
+        release_object( process );
+        return;
+    }
+
+    if (view->fd && (file = create_file_for_fd_obj( view->fd, GENERIC_READ,
+                                                    FILE_SHARE_READ | FILE_SHARE_WRITE )))
+    {
+        reply->handle = alloc_handle( current->process, file, GENERIC_READ, 0 );
+        release_object( file );
+    }
+
+    release_object( process );
+}
+
 /* unmap a memory view from the current process */
 DECL_HANDLER(unmap_view)
 {

@@ -21,6 +21,7 @@
         "wdm.h": "c",
         "win32u_private.h": "c",
         "thread": "c",
-        "ntuser.h": "c"
+        "ntuser.h": "c",
+        "*.def": "c"
     }
 }

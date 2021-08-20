@@ -42,6 +42,7 @@
 #define WIN32_NO_STATUS
 #include "winternl.h"
 
+#include "device.h"
 #include "file.h"
 #include "handle.h"
 #include "process.h"
@@ -49,6 +50,9 @@
 #include "request.h"
 #include "user.h"
 #include "security.h"
+
+// TODO: i need to implement https://github.com/Guy1524/wine/commit/db0e8026a9fd0931936a64a932a9ea772594f1c3#diff-2feb80daa5c7dcf9c1852eec92c9695481a5a56f45c5af241d01feee230e9af8R807
+// but i can't figure out how to deal with that
 
 /* process object */
 
@@ -601,6 +605,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
                                 unsigned int handle_count, struct token *token )
 {
     struct process *process;
+    krnl_cbdata_t cbdata;
 
     if (!(process = alloc_object( &process_ops )))
     {
@@ -622,6 +627,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
     process->debug_children  = 1;
     process->is_terminating  = 0;
     process->imagelen        = 0;
+    process->is_kernel       = 0;
     process->image           = NULL;
     process->job             = NULL;
     process->console         = NULL;
@@ -637,6 +643,8 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
     process->trace_data      = 0;
     process->rawinput_mouse  = NULL;
     process->rawinput_kbd    = NULL;
+    process->dev_mgr         = NULL;
+    process->callback_init_event = NULL;
     list_init( &process->kernel_object );
     list_init( &process->thread_list );
     list_init( &process->locks );
@@ -686,6 +694,14 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
         process->affinity = parent->affinity;
     }
     if (!process->handles || !process->token) goto error;
+
+    cbdata.cb_type = SERVER_CALLBACK_PROC_LIFE;
+    cbdata.process_life.create = 1;
+    cbdata.process_life.pid = process->id;
+    cbdata.process_life.ppid = process->parent_id;
+
+    queue_callback(&cbdata, NULL, NULL);
+
     process->session_id = token_get_session_id( process->token );
 
     /* Assign a high security label to the token. The default would be medium
@@ -738,6 +754,7 @@ static void process_destroy( struct object *obj )
     if (process->idle_event) release_object( process->idle_event );
     if (process->id) free_ptid( process->id );
     if (process->token) release_object( process->token );
+    if (process->callback_init_event) release_object( process->callback_init_event );
     free( process->dir_cache );
     free( process->image );
 }
@@ -924,7 +941,9 @@ void kill_console_processes( struct thread *renderer, int exit_code )
 static void process_killed( struct process *process )
 {
     struct list *ptr;
+    krnl_cbdata_t cbdata;
 
+    queue_callback(&cbdata, NULL, NULL);
     assert( list_empty( &process->thread_list ));
     process->end_time = current_time;
     close_process_desktop( process );
@@ -950,6 +969,10 @@ static void process_killed( struct process *process )
     finish_process_tracing( process );
     release_job_process( process );
     start_sigkill_timer( process );
+    cbdata.cb_type = SERVER_CALLBACK_PROC_LIFE;
+    cbdata.process_life.create = 0;
+    cbdata.process_life.pid = process->id;
+    cbdata.process_life.ppid = process->parent_id;
     wake_up( &process->obj, 0 );
 }
 
@@ -1097,6 +1120,11 @@ int set_process_debug_flag( struct process *process, int flag )
     return write_process_memory( process, process->peb + 2, 1, &data );
 }
 
+int is_process( struct object *obj )
+{
+    return obj->ops == &process_ops;
+}
+
 /* create a new process */
 DECL_HANDLER(new_process)
 {
@@ -1111,6 +1139,7 @@ DECL_HANDLER(new_process)
     struct process *parent;
     struct thread *parent_thread = current;
     int socket_fd = thread_get_inflight_fd( current, req->socket_fd );
+    struct stat winedevice_st, exe_st;
     const obj_handle_t *handles = NULL;
     const obj_handle_t *job_handles = NULL;
     unsigned int i, job_handle_count;
@@ -1268,6 +1297,10 @@ DECL_HANDLER(new_process)
 
     process->startup_info = (struct startup_info *)grab_object( info );
 
+    if (process->image && !fstatat(config_dir_fd, "drive_c/windows/system32/winedevice.exe", &winedevice_st, 0))
+        if (!fstat( get_file_unix_fd(process->image), &exe_st) && winedevice_st.st_ino == exe_st.st_ino && winedevice_st.st_dev == exe_st.st_dev)
+            process->is_kernel = 1;
+
     job = parent->job;
     while (job)
     {
@@ -1410,6 +1443,13 @@ DECL_HANDLER(init_process_done)
     if (process->debug_obj) set_process_debug_flag( process, 1 );
     reply->entry = current->entry_point;
     reply->suspend = (current->suspend || process->suspend);
+
+    if (process->callback_init_event)
+    {
+        reply->processed_event = alloc_handle(process, process->callback_init_event, SYNCHRONIZE, 0);
+        release_object(process->callback_init_event);
+        process->callback_init_event = NULL;
+    }
 }
 
 /* open a handle to a process */
@@ -1622,6 +1662,46 @@ DECL_HANDLER(write_process_memory)
         else set_error( STATUS_INVALID_PARAMETER );
         release_object( process );
     }
+}
+
+/* this should be removed, but i will remove it later... */
+DECL_HANDLER(load_dll)
+{
+    // struct process_dll *dll;
+    // struct object *done_event = NULL;
+
+    // if ((dll = process_load_dll( current->process, req->base, get_req_data(), get_req_data_size(), &done_event )))
+    // {
+    //     dll->dbg_offset = req->dbg_offset;
+    //     dll->dbg_size   = req->dbg_size;
+    //     dll->name       = req->name;
+    //     /* only generate event if initialization is done */
+    //     if (is_process_init_done( current->process ))
+    //     {
+    //         generate_debug_event( current, LOAD_DLL_DEBUG_EVENT, dll );
+    //         if (done_event)
+    //         {
+    //             reply->processed_event = alloc_handle(current->process, done_event, SYNCHRONIZE, 0);
+    //             release_object(done_event);
+    //         }
+    //     }
+    //     else if (done_event)
+    //     {
+    //         if (current->process->callback_init_event)
+    //             release_object(current->process->callback_init_event);
+    //         current->process->callback_init_event = done_event;
+    //     }
+    // }
+}
+
+DECL_HANDLER(unload_dll)
+{
+
+}
+
+DECL_HANDLER(get_dll_info)
+{
+    
 }
 
 /* retrieve the process idle event */

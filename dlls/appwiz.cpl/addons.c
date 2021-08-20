@@ -110,7 +110,7 @@ static LPWSTR url = NULL;
 static IBinding *dwl_binding;
 static WCHAR *msi_file;
 
-extern const char * CDECL wine_get_version(void);
+extern const char * CDECL tuica_get_version(void);
 
 static WCHAR * (CDECL *p_wine_get_dos_file_name)(const char*);
 
@@ -621,7 +621,7 @@ static void append_url_params( WCHAR *url )
     len += MultiByteToWideChar(CP_ACP, 0, addon->version, -1, url+len, size/sizeof(WCHAR)-len)-1;
     lstrcpyW(url+len, L"&winev=");
     len += lstrlenW(L"&winev=");
-    MultiByteToWideChar(CP_ACP, 0, wine_get_version(), -1, url+len, size/sizeof(WCHAR)-len);
+    MultiByteToWideChar(CP_ACP, 0, tuica_get_version(), -1, url+len, size/sizeof(WCHAR)-len);
 }
 
 static LPWSTR get_url(void)

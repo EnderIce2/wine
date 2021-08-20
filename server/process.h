@@ -65,6 +65,7 @@ struct process
     unsigned int         is_system:1;     /* is it a system process? */
     unsigned int         debug_children:1;/* also debug all child processes */
     unsigned int         is_terminating:1;/* is process terminating? */
+    unsigned int         is_kernel:1;     /* winedevice process */
     data_size_t          imagelen;        /* length of image path in bytes */
     WCHAR               *image;           /* main exe image full path */
     struct job          *job;             /* job object associated with this process */
@@ -88,6 +89,8 @@ struct process
     const struct rawinput_device *rawinput_mouse; /* rawinput mouse device, if any */
     const struct rawinput_device *rawinput_kbd;   /* rawinput keyboard device, if any */
     struct list          kernel_object;   /* list of kernel object pointers */
+    struct object       *callback_init_event;
+    struct device_manager *dev_mgr;
 };
 
 /* process functions */
@@ -117,6 +120,7 @@ extern void kill_process( struct process *process, int violent_death );
 extern void kill_console_processes( struct thread *renderer, int exit_code );
 extern void detach_debugged_processes( struct debug_obj *debug_obj, int exit_code );
 extern void enum_processes( int (*cb)(struct process*, void*), void *user);
+extern int is_process( struct object *obj );
 
 /* console functions */
 extern struct thread *console_get_renderer( struct console *console );

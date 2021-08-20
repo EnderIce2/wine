@@ -986,6 +986,7 @@ static void relocate_ntdll( void *module )
 
 
 static void *callback_module;
+/* This is very confusing, but i'll check it later. */
 
 /***********************************************************************
  *           load_builtin_callback
@@ -994,6 +995,13 @@ static void *callback_module;
  */
 static void load_builtin_callback( void *module, const char *filename )
 {
+    // HANDLE processed_event;
+    // processed_event = wine_server_ptr_handle(reply->processed_event);
+    // if (processed_event)
+    // {
+    //     NtWaitForSingleObject(processed_event, FALSE, NULL);
+    //     NtClose(processed_event);
+    // }
     callback_module = module;
 }
 
@@ -1074,6 +1082,7 @@ static NTSTATUS dlopen_dll( const char *so_name, UNICODE_STRING *nt_name, void *
 {
     void *module, *handle;
     const IMAGE_NT_HEADERS *nt;
+    HANDLE processed_event;
 
     callback_module = (void *)1;
     handle = dlopen( so_name, RTLD_NOW );
@@ -1119,6 +1128,12 @@ static NTSTATUS dlopen_dll( const char *so_name, UNICODE_STRING *nt_name, void *
         return STATUS_NO_MEMORY;
     }
     *ret_module = module;
+    // processed_event = wine_server_ptr_handle(reply->processed_event);
+    if (processed_event)
+    {
+        NtWaitForSingleObject(processed_event, FALSE, NULL);
+        NtClose(processed_event);
+    }
     return STATUS_SUCCESS;
 
 already_loaded:

@@ -1614,10 +1614,10 @@ LRESULT NC_HandleSysCommand( HWND hwnd, WPARAM wParam, LPARAM lParam )
             if (hmodule)
             {
                 BOOL (WINAPI *aboutproc)(HWND, LPCSTR, LPCSTR, HICON);
-                extern const char * CDECL wine_get_version(void);
+                extern const char * CDECL tuica_get_version(void);
                 char app[256];
 
-                sprintf( app, "Wine %s", wine_get_version() );
+                sprintf( app, "Wine %s", tuica_get_version() );
                 aboutproc = (void *)GetProcAddress( hmodule, "ShellAboutA" );
                 if (aboutproc) aboutproc( hwnd, app, NULL, 0 );
                 FreeLibrary( hmodule );

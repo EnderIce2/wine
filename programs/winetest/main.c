@@ -358,9 +358,9 @@ static void print_version (void)
     RTL_OSVERSIONINFOEXW rtlver;
     BOOL ext;
     int is_win2k3_r2, is_admin, is_elevated;
-    const char *(CDECL *wine_get_build_id)(void);
+    const char *(CDECL *tuica_get_build_id)(void);
     HMODULE hntdll = GetModuleHandleA("ntdll.dll");
-    void (CDECL *wine_get_host_version)( const char **sysname, const char **release );
+    void (CDECL *tuica_get_host_version)( const char **sysname, const char **release );
     BOOL (WINAPI *pGetProductInfo)(DWORD, DWORD, DWORD, DWORD, DWORD *);
     NTSTATUS (WINAPI *pRtlGetVersion)(RTL_OSVERSIONINFOEXW *);
 
@@ -414,13 +414,13 @@ static void print_version (void)
              ver.dwMajorVersion, ver.dwMinorVersion, ver.dwBuildNumber,
              ver.dwPlatformId, ver.szCSDVersion);
 
-    wine_get_build_id = (void *)GetProcAddress(hntdll, "wine_get_build_id");
-    wine_get_host_version = (void *)GetProcAddress(hntdll, "wine_get_host_version");
-    if (wine_get_build_id) xprintf( "    WineBuild=%s\n", wine_get_build_id() );
-    if (wine_get_host_version)
+    tuica_get_build_id = (void *)GetProcAddress(hntdll, "tuica_get_build_id");
+    tuica_get_host_version = (void *)GetProcAddress(hntdll, "tuica_get_host_version");
+    if (tuica_get_build_id) xprintf( "    WineBuild=%s\n", tuica_get_build_id() );
+    if (tuica_get_host_version)
     {
         const char *sysname, *release;
-        wine_get_host_version( &sysname, &release );
+        tuica_get_host_version( &sysname, &release );
         xprintf( "    Host system=%s\n    Host version=%s\n", sysname, release );
     }
     is_win2k3_r2 = GetSystemMetrics(SM_SERVERR2);

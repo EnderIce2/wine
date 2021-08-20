@@ -12,6 +12,7 @@ C_SRCS = \
 	device.c \
 	directory.c \
 	event.c \
+	esync.c \
 	fd.c \
 	file.c \
 	gpu_resource.c \

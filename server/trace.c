@@ -464,6 +464,43 @@ static void dump_hw_input( const char *prefix, const hw_input_t *input )
     }
 }
 
+static void dump_krnl_cbdata( const char *prefix, const krnl_cbdata_t *input )
+{
+    switch(input->cb_type)
+    {
+    case SERVER_CALLBACK_PROC_LIFE:
+        fprintf(stderr, "%s{type=PROCESS_%s,pid=%04x,ppid=%04x}",
+                prefix, input->process_life.create ? "CREATE" : "TERMINATE", input->process_life.pid, input->process_life.ppid);
+        break;
+    case SERVER_CALLBACK_THRD_LIFE:
+        fprintf(stderr, "%s{type=THREAD_%s,pid=%04x,tid=%04x}",
+                prefix, input->thread_life.create ? "CREATE" : "TERMINATE", input->thread_life.pid, input->thread_life.tid);
+        break;
+    case SERVER_CALLBACK_IMAGE_LIFE:
+        fprintf(stderr, "%s{type=IMAGE_LOAD,pid=%04x",
+                prefix, input->image_life.pid);
+        dump_uint64( ",base=%08x", &input->image_life.base);
+        dump_uint64( ",size=%08x", &input->image_life.size);
+        fputc( '}', stderr );
+        break;
+    case SERVER_CALLBACK_HANDLE_EVENT:
+        fprintf(stderr, "%s{type=HANDLE_EVENT,op_type=", prefix);
+        switch(input->handle_event.op_type)
+        {
+        case CREATE_PROC: fprintf(stderr, "CREATE_PROC"); break;
+        case DUP_PROC:    fprintf(stderr, "DUP_PROC");    break;
+        case CREATE_THRD: fprintf(stderr, "CREATE_THRD"); break;
+        case DUP_THRD:    fprintf(stderr, "DUP_THRD");    break;
+        default:;
+        }
+        fprintf(stderr, ",access=%04x,status=%04x,object=%04x", input->handle_event.access, input->handle_event.status, input->handle_event.object);
+        if (input->handle_event.op_type == DUP_PROC || input->handle_event.op_type == DUP_THRD)
+            fprintf(stderr, ",source_pid=%04x,target_pid=%04x", input->handle_event.source_pid, input->handle_event.target_pid);
+        fputc( '}', stderr );
+        break;
+    }
+}
+
 static void dump_luid( const char *prefix, const luid_t *luid )
 {
     fprintf( stderr, "%s%d.%u", prefix, luid->high_part, luid->low_part );
@@ -1512,6 +1549,7 @@ static void dump_init_process_done_reply( const struct init_process_done_reply *
 {
     dump_uint64( " entry=", &req->entry );
     fprintf( stderr, ", suspend=%d", req->suspend );
+    fprintf( stderr, ", processed_event=%04x", req->processed_event );
 }
 
 static void dump_init_first_thread_request( const struct init_first_thread_request *req )
@@ -1530,6 +1568,7 @@ static void dump_init_first_thread_reply( const struct init_first_thread_reply *
     dump_timeout( ", server_start=", &req->server_start );
     fprintf( stderr, ", session_id=%08x", req->session_id );
     fprintf( stderr, ", info_size=%u", req->info_size );
+    fprintf( stderr, ", processed_event=%04x", req->processed_event );
     dump_varargs_ushorts( ", machines=", cur_size );
 }
 
@@ -1545,6 +1584,7 @@ static void dump_init_thread_request( const struct init_thread_request *req )
 static void dump_init_thread_reply( const struct init_thread_reply *req )
 {
     fprintf( stderr, " suspend=%d", req->suspend );
+    fprintf( stderr, ", processed_event=%04x", req->processed_event );
 }
 
 static void dump_terminate_process_request( const struct terminate_process_request *req )
@@ -1682,6 +1722,20 @@ static void dump_set_thread_info_request( const struct set_thread_info_request *
     dump_varargs_unicode_str( ", desc=", cur_size );
 }
 
+static void dump_get_dll_info_request( const struct get_dll_info_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+    dump_uint64( ", base_address=", &req->base_address );
+}
+
+static void dump_get_dll_info_reply( const struct get_dll_info_reply *req )
+{
+    dump_uint64( " entry_point=", &req->entry_point );
+    dump_uint64( ", base_address=", &req->base_address );
+    fprintf( stderr, ", filename_len=%u", req->filename_len );
+    dump_varargs_unicode_str( ", filename=", cur_size );
+}
+
 static void dump_suspend_thread_request( const struct suspend_thread_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
@@ -1712,6 +1766,12 @@ static void dump_queue_apc_reply( const struct queue_apc_reply *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
     fprintf( stderr, ", self=%d", req->self );
+}
+
+static void dump_finalize_apc_request( const struct finalize_apc_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+    dump_apc_call( ", call=", &req->call );
 }
 
 static void dump_get_apc_result_request( const struct get_apc_result_request *req )
@@ -2284,6 +2344,17 @@ static void dump_map_view_request( const struct map_view_request *req )
 static void dump_unmap_view_request( const struct unmap_view_request *req )
 {
     dump_uint64( " base=", &req->base );
+}
+
+static void dump_get_mapping_file_request( const struct get_mapping_file_request *req )
+{
+    fprintf( stderr, " process=%04x", req->process );
+    dump_uint64( ", addr=", &req->addr );
+}
+
+static void dump_get_mapping_file_reply( const struct get_mapping_file_reply *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
 }
 
 static void dump_get_mapping_committed_range_request( const struct get_mapping_committed_range_request *req )
@@ -4268,11 +4339,38 @@ static void dump_get_kernel_object_handle_request( const struct get_kernel_objec
     fprintf( stderr, " manager=%04x", req->manager );
     dump_uint64( ", user_ptr=", &req->user_ptr );
     fprintf( stderr, ", access=%08x", req->access );
+    fprintf( stderr, ", attributes=%08x", req->attributes );
 }
 
 static void dump_get_kernel_object_handle_reply( const struct get_kernel_object_handle_reply *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
+}
+
+static void dump_callback_subscribe_request( const struct callback_subscribe_request *req )
+{
+    fprintf( stderr, " manager=%04x", req->manager );
+    fprintf( stderr, ", callback_mask=%d", req->callback_mask );
+}
+
+static void dump_get_next_callback_event_request( const struct get_next_callback_event_request *req )
+{
+    fprintf( stderr, " manager=%04x", req->manager );
+}
+
+static void dump_get_next_callback_event_reply( const struct get_next_callback_event_reply *req )
+{
+    dump_krnl_cbdata( " cb_data=", &req->cb_data );
+    fprintf( stderr, ", client_tid=%04x", req->client_tid );
+    dump_uint64( ", client_thread=", &req->client_thread );
+    dump_varargs_unicode_str( ", string_paramenter=", cur_size );
+}
+
+static void dump_attach_process_request( const struct attach_process_request *req )
+{
+    fprintf( stderr, " manager=%04x", req->manager );
+    dump_uint64( ", process=", &req->process );
+    fprintf( stderr, ", detach=%d", req->detach );
 }
 
 static void dump_make_process_system_request( const struct make_process_system_request *req )
@@ -4616,9 +4714,11 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_thread_info_request,
     (dump_func)dump_get_thread_times_request,
     (dump_func)dump_set_thread_info_request,
+    (dump_func)dump_get_dll_info_request,
     (dump_func)dump_suspend_thread_request,
     (dump_func)dump_resume_thread_request,
     (dump_func)dump_queue_apc_request,
+    (dump_func)dump_finalize_apc_request,
     (dump_func)dump_get_apc_result_request,
     (dump_func)dump_close_handle_request,
     (dump_func)dump_set_handle_info_request,
@@ -4667,6 +4767,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_mapping_info_request,
     (dump_func)dump_map_view_request,
     (dump_func)dump_unmap_view_request,
+    (dump_func)dump_get_mapping_file_request,
     (dump_func)dump_get_mapping_committed_range_request,
     (dump_func)dump_add_mapping_committed_range_request,
     (dump_func)dump_is_same_mapping_request,
@@ -4843,6 +4944,9 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_grab_kernel_object_request,
     (dump_func)dump_release_kernel_object_request,
     (dump_func)dump_get_kernel_object_handle_request,
+    (dump_func)dump_callback_subscribe_request,
+    (dump_func)dump_get_next_callback_event_request,
+    (dump_func)dump_attach_process_request,
     (dump_func)dump_make_process_system_request,
     (dump_func)dump_get_token_info_request,
     (dump_func)dump_create_linked_token_request,
@@ -4897,9 +5001,11 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_thread_info_reply,
     (dump_func)dump_get_thread_times_reply,
     NULL,
+    (dump_func)dump_get_dll_info_reply,
     (dump_func)dump_suspend_thread_reply,
     (dump_func)dump_resume_thread_reply,
     (dump_func)dump_queue_apc_reply,
+    NULL,
     (dump_func)dump_get_apc_result_reply,
     NULL,
     (dump_func)dump_set_handle_info_reply,
@@ -4948,6 +5054,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_mapping_info_reply,
     NULL,
     NULL,
+    (dump_func)dump_get_mapping_file_reply,
     (dump_func)dump_get_mapping_committed_range_reply,
     NULL,
     NULL,
@@ -5124,6 +5231,9 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     NULL,
     (dump_func)dump_get_kernel_object_handle_reply,
+    NULL,
+    (dump_func)dump_get_next_callback_event_reply,
+    NULL,
     (dump_func)dump_make_process_system_reply,
     (dump_func)dump_get_token_info_reply,
     (dump_func)dump_create_linked_token_reply,
@@ -5178,9 +5288,11 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "get_thread_info",
     "get_thread_times",
     "set_thread_info",
+    "get_dll_info",
     "suspend_thread",
     "resume_thread",
     "queue_apc",
+    "finalize_apc",
     "get_apc_result",
     "close_handle",
     "set_handle_info",
@@ -5229,6 +5341,7 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "get_mapping_info",
     "map_view",
     "unmap_view",
+    "get_mapping_file",
     "get_mapping_committed_range",
     "add_mapping_committed_range",
     "is_same_mapping",
@@ -5405,6 +5518,9 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "grab_kernel_object",
     "release_kernel_object",
     "get_kernel_object_handle",
+    "callback_subscribe",
+    "get_next_callback_event",
+    "attach_process",
     "make_process_system",
     "get_token_info",
     "create_linked_token",
@@ -5460,6 +5576,7 @@ static const struct
     { "CANNOT_DELETE",               STATUS_CANNOT_DELETE },
     { "CANT_OPEN_ANONYMOUS",         STATUS_CANT_OPEN_ANONYMOUS },
     { "CHILD_MUST_BE_VOLATILE",      STATUS_CHILD_MUST_BE_VOLATILE },
+    { "CONFLICTING_ADDRESSES",       STATUS_CONFLICTING_ADDRESSES },
     { "CONNECTION_ABORTED",          STATUS_CONNECTION_ABORTED },
     { "CONNECTION_ACTIVE",           STATUS_CONNECTION_ACTIVE },
     { "CONNECTION_REFUSED",          STATUS_CONNECTION_REFUSED },

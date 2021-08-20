@@ -351,11 +351,10 @@ NTSTATUS WINAPI ObReferenceObjectByHandle( HANDLE handle, ACCESS_MASK access,
 
     TRACE( "%p %x %p %d %p %p\n", handle, access, type, mode, ptr, info );
 
-    if (mode != KernelMode)
-    {
-        FIXME("UserMode access not implemented\n");
-        return STATUS_NOT_IMPLEMENTED;
-    }
+    if (mode != KernelMode && (ULONG_PTR)handle & KERNEL_HANDLE_FLAG)
+        return STATUS_ACCESS_DENIED;
+    if (mode != UserMode && !((ULONG_PTR)handle & KERNEL_HANDLE_FLAG))
+        return STATUS_INVALID_PARAMETER;
 
     status = kernel_object_from_handle( handle, type, ptr );
     if (!status) ObReferenceObject( *ptr );
@@ -373,13 +372,10 @@ NTSTATUS WINAPI ObOpenObjectByPointer( void *obj, ULONG attr, ACCESS_STATE *acce
 
     TRACE( "%p %x %p %x %p %d %p\n", obj, attr, access_state, access, type, mode, handle );
 
-    if (mode != KernelMode)
-    {
-        FIXME( "UserMode access not implemented\n" );
-        return STATUS_NOT_IMPLEMENTED;
-    }
+    if (mode == UserMode && attr & OBJ_KERNEL_HANDLE)
+        return STATUS_PRIVILEGE_NOT_HELD;
 
-    if (attr & ~OBJ_KERNEL_HANDLE) FIXME( "attr %#x not supported\n", attr );
+    if (mode == KernelMode && attr & ~OBJ_KERNEL_HANDLE) FIXME( "attr %#x not supported\n", attr );
     if (access_state) FIXME( "access_state not implemented\n" );
 
     if (type && ObGetObjectType( obj ) != type) return STATUS_OBJECT_TYPE_MISMATCH;
@@ -389,6 +385,7 @@ NTSTATUS WINAPI ObOpenObjectByPointer( void *obj, ULONG attr, ACCESS_STATE *acce
         req->manager  = wine_server_obj_handle( get_device_manager() );
         req->user_ptr = wine_server_client_ptr( obj );
         req->access   = access;
+        req->attributes = attr;
         if (!(status = wine_server_call( req )))
             *handle = wine_server_ptr_handle( reply->handle );
     }
@@ -888,6 +885,55 @@ static void unload_driver( struct wine_rb_entry *entry, void *context )
     CloseServiceHandle( (void *)service_handle );
 }
 
+static HANDLE manager;
+
+DECLARE_CRITICAL_SECTION(callback_cs);
+
+NTSTATUS callback_subscribe(enum kernel_callback_type type, BOOL unsub)
+{
+    static enum kernel_callback_type current_types;
+    NTSTATUS status;
+
+    EnterCriticalSection(&callback_cs);
+
+    if (unsub)
+        current_types &= ~type;
+    else
+        current_types |= type;
+
+    SERVER_START_REQ(callback_subscribe)
+    {
+        req->manager = wine_server_obj_handle( manager );
+        req->callback_mask = current_types;
+        status = wine_server_call(req);
+    }
+    SERVER_END_REQ;
+
+    LeaveCriticalSection(&callback_cs);
+
+    return status;
+}
+
+static void dispatch_process_create_callbacks(const krnl_cbdata_t *data);
+static void dispatch_thread_create_callbacks(const krnl_cbdata_t *data);
+static void dispatch_image_load_callbacks(const krnl_cbdata_t *data, const WCHAR *image_path);
+static void dispatch_object_callbacks(const krnl_cbdata_t *data);
+void handle_callback(const krnl_cbdata_t *data, const WCHAR *image_path)
+{
+    TRACE("dispatch callback %u\n", data->cb_type);
+
+    EnterCriticalSection(&callback_cs);
+    switch(data->cb_type)
+    {
+        case SERVER_CALLBACK_PROC_LIFE: dispatch_process_create_callbacks(data); break;
+        case SERVER_CALLBACK_THRD_LIFE: dispatch_thread_create_callbacks(data); break;
+        case SERVER_CALLBACK_IMAGE_LIFE: dispatch_image_load_callbacks(data, image_path); break;
+        case SERVER_CALLBACK_HANDLE_EVENT: dispatch_object_callbacks(data); break;
+        default:;
+    }
+    LeaveCriticalSection(&callback_cs);
+}
+
 PEPROCESS PsInitialSystemProcess = NULL;
 
 /***********************************************************************
@@ -898,8 +944,10 @@ NTSTATUS CDECL wine_ntoskrnl_main_loop( HANDLE stop_event )
     HANDLE manager = get_device_manager();
     struct dispatch_context context;
     NTSTATUS status = STATUS_SUCCESS;
+    WCHAR image_path[MAX_PATH];
     struct wine_driver *driver;
     HANDLE handles[2];
+    manager = get_device_manager();
 
     context.handle  = NULL;
     context.irp     = NULL;
@@ -917,13 +965,33 @@ NTSTATUS CDECL wine_ntoskrnl_main_loop( HANDLE stop_event )
 
     for (;;)
     {
-        NtCurrentTeb()->Reserved5[1] = NULL;
+        NtCurrentTeb()->SystemReserved1[15] = NULL;
         if (!context.in_buff && !(context.in_buff = HeapAlloc( GetProcessHeap(), 0, context.in_size )))
         {
             ERR( "failed to allocate buffer\n" );
             status = STATUS_NO_MEMORY;
             goto done;
         }
+
+        SERVER_START_REQ(get_next_callback_event)
+        {
+            req->manager  = wine_server_obj_handle( manager );
+            wine_server_set_reply(req, image_path, sizeof(image_path));
+            if (!(status = wine_server_call(req)))
+            {
+                client_tid = reply->client_tid;
+                if (!client_tid)
+                    client_tid = request_thread;
+                NtCurrentTeb()->SystemReserved1[15] = wine_server_get_ptr( reply->client_thread );
+                image_path[wine_server_reply_size(reply) / sizeof(WCHAR)] = 0;
+                KeGetCurrentThread();
+                handle_callback(&reply->cb_data, image_path);
+            }
+        }
+        SERVER_END_REQ;
+
+        if (status == STATUS_SUCCESS)
+            continue;
 
         SERVER_START_REQ( get_next_device_request )
         {
@@ -938,7 +1006,8 @@ NTSTATUS CDECL wine_ntoskrnl_main_loop( HANDLE stop_event )
                 context.params  = reply->params;
                 context.in_size = reply->in_size;
                 client_tid = reply->client_tid;
-                NtCurrentTeb()->Reserved5[1] = wine_server_get_ptr( reply->client_thread );
+                NtCurrentTeb()->SystemReserved1[15] = wine_server_get_ptr( reply->client_thread );
+                KeGetCurrentThread();
             }
             else
             {
@@ -2282,6 +2351,9 @@ NTSTATUS WINAPI FsRtlRegisterUncProvider(PHANDLE MupHandle, PUNICODE_STRING Redi
 static void *create_process_object( HANDLE handle )
 {
     PEPROCESS process;
+    DWORD filename_len = 0;
+    HANDLE process_file = NULL;
+    NTSTATUS stat;
 
     if (!(process = alloc_kernel_object( PsProcessType, handle, sizeof(*process), 0 ))) return NULL;
 
@@ -2289,6 +2361,69 @@ static void *create_process_object( HANDLE handle )
     process->header.WaitListHead.Blink = INVALID_HANDLE_VALUE; /* mark as kernel object */
     NtQueryInformationProcess( handle, ProcessBasicInformation, &process->info, sizeof(process->info), NULL );
     IsWow64Process( handle, &process->wow64 );
+    
+    SERVER_START_REQ(get_dll_info)
+    {
+        req->handle = wine_server_obj_handle(handle);
+        req->base_address = 0;
+        if (((stat = wine_server_call(req)) == STATUS_BUFFER_TOO_SMALL) || stat == STATUS_SUCCESS)
+        {
+            process->section_base_address = (PVOID) reply->base_address;
+            filename_len = reply->filename_len;
+        }
+        else
+        {
+            ERR("Failed to get base address stat %x\n", stat);
+            process->section_base_address = (PVOID) 0;
+        }
+    }
+    SERVER_END_REQ;
+
+    if (process->section_base_address)
+    {
+        SERVER_START_REQ(get_mapping_file)
+        {
+            req->addr = wine_server_client_ptr(process->section_base_address);
+            req->process = wine_server_obj_handle(handle);
+            if (!(stat = wine_server_call(req)))
+                process_file = wine_server_ptr_handle(reply->handle);
+        }
+        SERVER_END_REQ;
+
+        if (stat)
+        {
+            PWCHAR filename = HeapAlloc(GetProcessHeap(), 0, filename_len + sizeof(WCHAR));
+            filename[filename_len / sizeof(WCHAR)] = 0;
+
+            WARN("Failed to get file from mapping, address = %p.  Falling back to new handle.\n, stat = %x\n", process->section_base_address, stat);
+
+            SERVER_START_REQ(get_dll_info)
+            {
+                req->handle = wine_server_obj_handle(handle);
+                req->base_address = 0;
+                wine_server_set_reply(req, filename, filename_len);
+                stat = wine_server_call(req);
+            }
+            SERVER_END_REQ;
+
+            if (!stat)
+            {
+                process_file = CreateFileW(filename, 0, FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+                if (!process_file)
+                    ERR("Fallback failed to create handle to exe file. %x\n", GetLastError());
+            }
+            else
+                ERR("Fallback failed to get process exe file name %x\n", stat);
+            HeapFree(GetProcessHeap(), 0, filename);
+        }
+
+        if (process_file)
+        {
+            stat = ObReferenceObjectByHandle(process_file, FILE_GENERIC_READ, IoFileObjectType, KernelMode, (void**) &process->file_object, NULL);
+            CloseHandle(process_file);
+        }
+    }
+    
     return process;
 }
 
@@ -2381,6 +2516,8 @@ static void *create_thread_object( HANDLE handle )
         }
     }
 
+    InitializeListHead(&thread->ApcListHead[KernelMode]);
+    InitializeListHead(&thread->ApcListHead[UserMode]);
 
     return thread;
 }
@@ -2401,7 +2538,7 @@ POBJECT_TYPE PsThreadType = &thread_type;
  */
 PRKTHREAD WINAPI KeGetCurrentThread(void)
 {
-    struct _KTHREAD *thread = NtCurrentTeb()->Reserved5[1];
+    struct _KTHREAD *thread = NtCurrentTeb()->SystemReserved1[15];
 
     if (!thread)
     {
@@ -2414,10 +2551,26 @@ PRKTHREAD WINAPI KeGetCurrentThread(void)
         kernel_object_from_handle( handle, PsThreadType, (void**)&thread );
         if (handle != GetCurrentThread()) NtClose( handle );
 
-        NtCurrentTeb()->Reserved5[1] = thread;
+        NtCurrentTeb()->SystemReserved1[15] = thread;
     }
 
     return thread;
+}
+
+struct system_thread_ctx
+{
+    PKSTART_ROUTINE start;
+    PVOID context;
+};
+
+static void WINAPI init_system_thread(PVOID context)
+{
+    struct system_thread_ctx info = *(struct system_thread_ctx *)context;
+    HeapFree( GetProcessHeap(), 0, context );
+
+    NtCurrentTeb()->SystemReserved1[15] = KeGetCurrentThread();
+
+    info.start(info.context);
 }
 
 /*****************************************************
@@ -2919,9 +3072,16 @@ NTSTATUS WINAPI ObReferenceObjectByPointer(void *obj, ACCESS_MASK access,
                                            POBJECT_TYPE type,
                                            KPROCESSOR_MODE mode)
 {
-    FIXME("(%p, %x, %p, %d): stub\n", obj, access, type, mode);
+    TRACE("(%p, %x, %p, %d)\n", obj, access, type, mode);
 
-    return STATUS_NOT_IMPLEMENTED;
+    if (mode != KernelMode)
+        FIXME("Not checking access mask\n");
+
+    if (type && ObGetObjectType(obj) != type)
+        return STATUS_OBJECT_TYPE_MISMATCH;
+
+    ObReferenceObject(obj);
+    return STATUS_SUCCESS;
 }
 
 
@@ -2944,15 +3104,163 @@ void FASTCALL ObfDereferenceObject( void *obj )
     ObDereferenceObject( obj );
 }
 
+static struct list object_callbacks = LIST_INIT( object_callbacks );
+struct object_callback
+{
+    struct list entry;
+    OB_CALLBACK_REGISTRATION routines;
+};
+
+static void dispatch_object_callbacks(const krnl_cbdata_t *data)
+{
+    struct object_callback *cb;
+    OB_OPERATION operation = (data->handle_event.op_type == CREATE_PROC || data->handle_event.op_type == CREATE_THRD) ? OB_OPERATION_HANDLE_CREATE : OB_OPERATION_HANDLE_DUPLICATE;
+    POBJECT_TYPE *object_type = (data->handle_event.op_type == CREATE_PROC || data->handle_event.op_type == DUP_PROC) ? &PsProcessType : &PsThreadType;
+    ACCESS_MASK new_access = data->handle_event.access;
+    PEPROCESS source_process, target_process;
+    NTSTATUS stat;
+    void *object;
+
+    if ((stat = ObReferenceObjectByHandle(wine_server_ptr_handle(data->handle_event.object), 0, *object_type, KernelMode, &object, NULL)) != STATUS_SUCCESS)
+    {
+        ERR("Invalid callback ntstatus=%x\n", stat);
+        CloseHandle(wine_server_ptr_handle(data->handle_event.object));
+        return;
+    }
+    TRACE("object = %p, operation = %u, krnl_handle=%u\n", object, data->handle_event.op_type, data->handle_event.target_pid == GetCurrentProcessId());
+
+    CloseHandle(wine_server_ptr_handle(data->handle_event.object));
+
+    if (operation == OB_OPERATION_HANDLE_DUPLICATE)
+    {
+        if (PsLookupProcessByProcessId((HANDLE)(ULONG_PTR)data->handle_event.source_pid, &source_process) != STATUS_SUCCESS)
+            return;
+        if (PsLookupProcessByProcessId((HANDLE)(ULONG_PTR)data->handle_event.target_pid, &target_process) != STATUS_SUCCESS)
+        {
+            ObDereferenceObject(source_process);
+            return;
+        }
+    }
+
+    LIST_FOR_EACH_ENTRY(cb, &object_callbacks, struct object_callback, entry)
+    {
+        for (unsigned int i = 0; i < cb->routines.OperationRegistrationCount; i++)
+        {
+            OB_OPERATION_REGISTRATION op_reg = cb->routines.OperationRegistration[i];
+            OB_PRE_OPERATION_INFORMATION pre_info;
+            OB_PRE_OPERATION_PARAMETERS pre_params;
+
+            if (op_reg.ObjectType != object_type || !(op_reg.Operations & operation))
+                continue;
+
+            pre_info.Operation = operation;
+            pre_info.u.s.KernelHandle = data->handle_event.target_pid == GetCurrentProcessId();
+            pre_info.Object = object;
+            pre_info.ObjectType = *object_type;
+            pre_info.CallContext = NULL;
+            if (operation == OB_OPERATION_HANDLE_CREATE)
+            {
+                pre_params.CreateHandleInformation.DesiredAccess = new_access;
+                pre_params.CreateHandleInformation.OriginalDesiredAccess = data->handle_event.access;
+            }
+            else
+            {
+                pre_params.DuplicateHandleInformation.DesiredAccess = new_access;
+                pre_params.DuplicateHandleInformation.OriginalDesiredAccess = data->handle_event.access;
+                pre_params.DuplicateHandleInformation.SourceProcess = source_process;
+                pre_params.DuplicateHandleInformation.TargetProcess = target_process;
+            }
+            pre_info.Parameters = &pre_params;
+
+            TRACE( "\1Call PreOperation %p (ctx=%p,info=%p)\n", op_reg.PreOperation, cb->routines.RegistrationContext, &pre_info);
+            op_reg.PreOperation(cb->routines.RegistrationContext, &pre_info);
+            TRACE( "\1Ret  PreOperation %p\n", op_reg.PreOperation);
+
+            if (operation == OB_OPERATION_HANDLE_CREATE)
+                new_access = pre_params.CreateHandleInformation.DesiredAccess;
+            else
+                new_access = pre_params.DuplicateHandleInformation.DesiredAccess;
+
+            if (pre_info.CallContext)
+                FIXME("CallContext not supported\n");
+        }
+    }
+
+    if (new_access != data->handle_event.access)
+        FIXME("Access mask manipulation not supported (%x->%x)\n", data->handle_event.access, new_access);
+
+    LIST_FOR_EACH_ENTRY(cb, &object_callbacks, struct object_callback, entry)
+    {
+        for (unsigned int i = 0; i < cb->routines.OperationRegistrationCount; i++)
+        {
+            OB_OPERATION_REGISTRATION op_reg = cb->routines.OperationRegistration[i];
+            OB_POST_OPERATION_INFORMATION post_info;
+            OB_POST_OPERATION_PARAMETERS post_params;
+
+            if (op_reg.ObjectType != object_type || !(op_reg.Operations & operation))
+                continue;
+
+            post_info.Operation = operation;
+            post_info.u.s.KernelHandle = data->handle_event.target_pid == GetCurrentProcessId();
+            post_info.Object = object;
+            post_info.ObjectType = *object_type;
+            post_info.CallContext = NULL;
+            post_info.ReturnStatus = data->handle_event.status;
+            if (operation == OB_OPERATION_HANDLE_CREATE)
+                post_params.CreateHandleInformation.GrantedAccess = new_access;
+            else
+                post_params.DuplicateHandleInformation.GrantedAccess = new_access;
+            post_info.Parameters = &post_params;
+
+            TRACE( "\1Call PostOperation %p (ctx=%p,info=%p)\n", op_reg.PostOperation, cb->routines.RegistrationContext, &post_info);
+            op_reg.PostOperation(cb->routines.RegistrationContext, &post_info);
+            TRACE( "\1Ret  PostOperation %p\n", op_reg.PostOperation);
+        }
+    }
+
+    ObDereferenceObject(object);
+    if (operation == OB_OPERATION_HANDLE_DUPLICATE)
+    {
+        ObDereferenceObject(source_process);
+        ObDereferenceObject(target_process);
+    }
+}
+
+#define STATUS_FLT_INSTANCE_ALTITUDE_COLLISION 0xC01C0011
+
 /***********************************************************************
  *           ObRegisterCallbacks (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI ObRegisterCallbacks(POB_CALLBACK_REGISTRATION callback, void **handle)
 {
-    FIXME( "callback %p, handle %p.\n", callback, handle );
+    struct object_callback *cb;
 
-    if(handle)
-        *handle = UlongToHandle(0xdeadbeaf);
+    TRACE( "%p %p\n", callback, handle );
+
+    EnterCriticalSection(&callback_cs);
+
+    LIST_FOR_EACH_ENTRY(cb, &object_callbacks, struct object_callback, entry)
+    {
+        if (!(RtlCompareUnicodeString(&cb->routines.Altitude, &callback->Altitude, FALSE)))
+        {
+            TRACE("conflict\n");
+            LeaveCriticalSection(&callback_cs);
+            return STATUS_FLT_INSTANCE_ALTITUDE_COLLISION;
+        }
+    }
+
+    cb = heap_alloc(sizeof(*cb));
+    cb->routines = *callback;
+    cb->routines.OperationRegistration = heap_alloc(sizeof(OB_OPERATION_REGISTRATION) * cb->routines.OperationRegistrationCount);
+    memcpy(cb->routines.OperationRegistration, callback->OperationRegistration, sizeof(OB_OPERATION_REGISTRATION) * cb->routines.OperationRegistrationCount);
+    *handle = cb;
+
+    if (list_empty(&object_callbacks))
+        callback_subscribe(SERVER_CALLBACK_HANDLE_EVENT, FALSE);
+
+    list_add_tail(&object_callbacks, &cb->entry);
+
+    LeaveCriticalSection(&callback_cs);
 
     return STATUS_SUCCESS;
 }
@@ -2962,7 +3270,19 @@ NTSTATUS WINAPI ObRegisterCallbacks(POB_CALLBACK_REGISTRATION callback, void **h
  */
 void WINAPI ObUnRegisterCallbacks(void *handle)
 {
-    FIXME( "stub: %p\n", handle );
+    struct object_callback *cb = (struct object_callback *) handle;
+
+    TRACE( "%p\n", handle );
+
+    EnterCriticalSection(&callback_cs);
+
+    list_remove(&cb->entry);
+    heap_free(cb->routines.OperationRegistration);
+    heap_free(cb);
+    if (list_empty(&object_callbacks))
+        callback_subscribe(SERVER_CALLBACK_HANDLE_EVENT, TRUE);
+
+    LeaveCriticalSection(&callback_cs);
 }
 
 /***********************************************************************
@@ -2994,9 +3314,19 @@ NTSTATUS WINAPI PsCreateSystemThread(PHANDLE ThreadHandle, ULONG DesiredAccess,
 			             HANDLE ProcessHandle, PCLIENT_ID ClientId,
                                      PKSTART_ROUTINE StartRoutine, PVOID StartContext)
 {
+    struct system_thread_ctx *info;
+
     if (!ProcessHandle) ProcessHandle = GetCurrentProcess();
+    // return RtlCreateUserThread(ProcessHandle, 0, FALSE, 0, 0,
+    //                            0, StartRoutine, StartContext,
+    //                            ThreadHandle, ClientId);
+
+    info = HeapAlloc( GetProcessHeap(), 0, sizeof(*info) );
+    info->start = StartRoutine;
+    info->context = StartContext;
+
     return RtlCreateUserThread(ProcessHandle, 0, FALSE, 0, 0,
-                               0, StartRoutine, StartContext,
+                               0, init_system_thread, info,
                                ThreadHandle, ClientId);
 }
 
@@ -3072,6 +3402,25 @@ NTSTATUS WINAPI PsImpersonateClient(PETHREAD Thread, PACCESS_TOKEN Token, BOOLEA
     return STATUS_NOT_IMPLEMENTED;
 }
 
+static struct list process_create_callbacks = LIST_INIT(process_create_callbacks);
+struct process_create_callback
+{
+    struct list entry;
+    PCREATE_PROCESS_NOTIFY_ROUTINE routine;
+};
+
+
+static void dispatch_process_create_callbacks(const krnl_cbdata_t *data)
+{
+    struct process_create_callback *cb;
+
+    LIST_FOR_EACH_ENTRY(cb, &process_create_callbacks, struct process_create_callback, entry)
+    {
+        TRACE("\1Call CREATE_PROCESS_NOTIFY_ROUTINE %p (ppid=%x,pid=%x,create=%u);\n", cb->routine, data->process_life.ppid, data->process_life.pid, data->process_life.create);
+        cb->routine((HANDLE)(ULONG_PTR)data->process_life.ppid, (HANDLE)(ULONG_PTR)data->process_life.pid, data->process_life.create);
+        TRACE("\1Ret  CREATE_PROCESS_NOTIFY_ROUTINE %p;\n", cb->routine);
+    }
+}
 
 /***********************************************************************
  *           PsRevertToSelf   (NTOSKRNL.EXE.@)
@@ -3087,8 +3436,43 @@ void WINAPI PsRevertToSelf(void)
  */
 NTSTATUS WINAPI PsSetCreateProcessNotifyRoutine( PCREATE_PROCESS_NOTIFY_ROUTINE callback, BOOLEAN remove )
 {
-    FIXME( "stub: %p %d\n", callback, remove );
-    return STATUS_SUCCESS;
+    struct process_create_callback *cb;
+    NTSTATUS status;
+
+    TRACE( "%p %d\n", callback, remove );
+
+    EnterCriticalSection(&callback_cs);
+
+    if (remove)
+    {
+        status = STATUS_INVALID_PARAMETER;
+        LIST_FOR_EACH_ENTRY(cb, &process_create_callbacks, struct process_create_callback, entry)
+        {
+            if (cb->routine == callback)
+            {
+                list_remove(&cb->entry);
+                heap_free(cb);
+                status = STATUS_SUCCESS;
+                if (list_empty(&process_create_callbacks))
+                    callback_subscribe(SERVER_CALLBACK_PROC_LIFE, TRUE);
+                break;
+            }
+        }
+    }
+    else
+    {
+        cb = heap_alloc(sizeof(*cb));
+        cb->routine = callback;
+
+        if (list_empty(&process_create_callbacks))
+            callback_subscribe(SERVER_CALLBACK_PROC_LIFE, FALSE);
+        list_add_tail(&process_create_callbacks, &cb->entry);
+        status = STATUS_SUCCESS;
+    }
+
+    LeaveCriticalSection(&callback_cs);
+
+    return status;
 }
 
 
@@ -3101,13 +3485,61 @@ NTSTATUS WINAPI PsSetCreateProcessNotifyRoutineEx( PCREATE_PROCESS_NOTIFY_ROUTIN
     return STATUS_SUCCESS;
 }
 
+static struct list thread_create_callbacks = LIST_INIT(thread_create_callbacks);
+struct thread_create_callback
+{
+    struct list entry;
+    PCREATE_THREAD_NOTIFY_ROUTINE routine;
+};
+
+void WINAPI KeStackAttachProcess(KPROCESS *process, KAPC_STATE *state);
+void WINAPI KeUnstackDetachProcess(KAPC_STATE *state);
+static void dispatch_thread_create_callbacks(const krnl_cbdata_t *data)
+{
+    struct thread_create_callback *cb;
+    NTSTATUS stat;
+    PEPROCESS new_thread_proc;
+    KAPC_STATE apc_state;
+
+    stat = PsLookupProcessByProcessId(wine_server_ptr_handle(data->process_life.pid), &new_thread_proc);
+    if (!stat)
+        KeStackAttachProcess(new_thread_proc, &apc_state);
+    else
+        ERR("Failed to attach to new thread's process. %x\n", stat);
+
+    LIST_FOR_EACH_ENTRY(cb, &thread_create_callbacks, struct thread_create_callback, entry)
+    {
+        TRACE("\1Call CREATE_THREAD_NOTIFY_ROUTINE %p (pid=%x,tid=%x,create=%x)\n", cb->routine, data->thread_life.pid, data->thread_life.tid, data->thread_life.create);
+        cb->routine((HANDLE)(ULONG_PTR)data->thread_life.pid, (HANDLE)(ULONG_PTR)data->thread_life.tid, data->thread_life.create);
+        TRACE("\1Ret  CREATE_THREAD_NOTIFY_ROUTINE %p\n", cb->routine);
+    }
+
+    if (!stat)
+        KeUnstackDetachProcess(&apc_state);
+}
+
 
 /***********************************************************************
  *           PsSetCreateThreadNotifyRoutine   (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI PsSetCreateThreadNotifyRoutine( PCREATE_THREAD_NOTIFY_ROUTINE NotifyRoutine )
 {
-    FIXME( "stub: %p\n", NotifyRoutine );
+    struct thread_create_callback *cb;
+
+    TRACE( "%p\n", NotifyRoutine );
+
+    EnterCriticalSection(&callback_cs);
+
+    cb = heap_alloc(sizeof(*cb));
+    cb->routine = NotifyRoutine;
+
+    if (list_empty(&thread_create_callbacks))
+        callback_subscribe(SERVER_CALLBACK_THRD_LIFE, FALSE);
+
+    list_add_tail(&thread_create_callbacks, &cb->entry);
+
+    LeaveCriticalSection(&callback_cs);
+
     return STATUS_SUCCESS;
 }
 
@@ -3117,8 +3549,26 @@ NTSTATUS WINAPI PsSetCreateThreadNotifyRoutine( PCREATE_THREAD_NOTIFY_ROUTINE No
  */
 NTSTATUS WINAPI PsRemoveCreateThreadNotifyRoutine( PCREATE_THREAD_NOTIFY_ROUTINE NotifyRoutine )
 {
-    FIXME( "stub: %p\n", NotifyRoutine );
-    return STATUS_SUCCESS;
+    struct thread_create_callback *cb;
+
+    TRACE( "%p\n", NotifyRoutine );
+
+    EnterCriticalSection(&callback_cs);
+
+    LIST_FOR_EACH_ENTRY(cb, &thread_create_callbacks, struct thread_create_callback, entry)
+    {
+        if (cb->routine == NotifyRoutine)
+        {
+            list_remove(&cb->entry);
+            heap_free(cb);
+            if (list_empty(&thread_create_callbacks))
+                callback_subscribe(SERVER_CALLBACK_THRD_LIFE, TRUE);
+            LeaveCriticalSection(&callback_cs);
+            return STATUS_SUCCESS;
+        }
+    }
+    LeaveCriticalSection(&callback_cs);
+    return STATUS_INVALID_PARAMETER;
 }
 
 
@@ -3157,8 +3607,18 @@ PACCESS_TOKEN WINAPI PsReferencePrimaryToken(PEPROCESS process)
  */
 NTSTATUS WINAPI PsReferenceProcessFilePointer(PEPROCESS process, FILE_OBJECT **file)
 {
-    FIXME("%p %p\n", process, file);
-    return STATUS_NOT_IMPLEMENTED;
+    TRACE("%p %p\n", process, file);
+
+    if (!(process->file_object))
+    {
+        FIXME("file object was not found\n");
+        return STATUS_NOT_IMPLEMENTED;
+    }
+
+    ObReferenceObject(process->file_object);
+    *file = process->file_object;
+
+    return STATUS_SUCCESS;
 }
 
 
@@ -3308,18 +3768,60 @@ NTSTATUS WINAPI IoWMIOpenBlock(LPCGUID guid, ULONG desired_access, PVOID *data_b
     return STATUS_NOT_IMPLEMENTED;
 }
 
+static struct list image_load_callbacks = LIST_INIT(image_load_callbacks);
+struct image_load_callback
+{
+    struct list entry;
+    PLOAD_IMAGE_NOTIFY_ROUTINE routine;
+};
+
+void dispatch_image_load_callbacks(const krnl_cbdata_t *data, const WCHAR *image_path)
+{
+    struct image_load_callback *cb;
+    UNICODE_STRING image_path_us;
+    IMAGE_INFO info;
+
+    RtlCreateUnicodeString(&image_path_us, image_path);
+
+    info.u.s.ImageAddressingMode = 3;
+    info.u.s.SystemModeImage = data->image_life.pid == GetCurrentProcessId();
+    info.u.s.ImageMappedToAllPids = 0;
+    info.u.s.ExtendedInfoPresent = 0;
+    info.ImageBase = wine_server_get_ptr(data->image_life.base);
+    info.ImageSize = data->image_life.size;
+    info.ImageSectionNumber = 0;
+
+    LIST_FOR_EACH_ENTRY(cb, &image_load_callbacks, struct image_load_callback, entry)
+    {
+        TRACE("\1Call LOAD_IMAGE_NOTIFY_ROUTINE %p (dll=%s,pid=%x,info=%p)\n", cb->routine, debugstr_us(&image_path_us), data->image_life.pid, &info);
+        cb->routine(&image_path_us, (HANDLE)(ULONG_PTR)data->image_life.pid, &info);
+        TRACE("\1Ret  LOAD_IMAGE_NOTIFY_ROUTINE %p\n", cb->routine);
+    }
+}
+
 /*****************************************************
  *           PsSetLoadImageNotifyRoutine   (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI PsSetLoadImageNotifyRoutine(PLOAD_IMAGE_NOTIFY_ROUTINE routine)
 {
-    FIXME("routine %p, semi-stub.\n", routine);
+    FIXME("routine %p, semi-stub??\n", routine);
+    struct image_load_callback *cb;
+    EnterCriticalSection(&callback_cs);
+    cb = heap_alloc(sizeof(*cb));
+    cb->routine = routine;
 
     if (load_image_notify_routine_count == ARRAY_SIZE(load_image_notify_routines))
         return STATUS_INSUFFICIENT_RESOURCES;
 
-    load_image_notify_routines[load_image_notify_routine_count++] = routine;
+    /*
+        if (list_empty(&image_load_callbacks))
+        callback_subscribe(SERVER_CALLBACK_IMAGE_LIFE, FALSE);
 
+        list_add_tail(&image_load_callbacks, &cb->entry);
+    */
+
+    load_image_notify_routines[load_image_notify_routine_count++] = routine;
+    LeaveCriticalSection(&callback_cs);
     return STATUS_SUCCESS;
 }
 
@@ -3368,7 +3870,7 @@ NTSTATUS WINAPI ObQueryNameString( void *object, OBJECT_NAME_INFORMATION *name, 
 
     TRACE("object %p, name %p, size %u, ret_size %p.\n", object, name, size, ret_size);
 
-    if ((ret = ObOpenObjectByPointer( object, 0, NULL, 0, NULL, KernelMode, &handle )))
+    if ((ret = ObOpenObjectByPointer( object, OBJ_KERNEL_HANDLE, NULL, 0, NULL, KernelMode, &handle )))
         return ret;
     ret = NtQueryObject( handle, ObjectNameInformation, name, size, ret_size );
 
@@ -4378,6 +4880,10 @@ void WINAPI KeSignalCallDpcDone(void *barrier)
 
 void * WINAPI PsGetProcessSectionBaseAddress(PEPROCESS process)
 {
+    /*
+        TRACE("(%p)->%p\n", process, process->section_base_address);
+        return process->section_base_address;
+    */
     void *image_base;
     NTSTATUS status;
     SIZE_T size;
@@ -4406,14 +4912,49 @@ void * WINAPI PsGetProcessSectionBaseAddress(PEPROCESS process)
     return image_base;
 }
 
-void WINAPI KeStackAttachProcess(KPROCESS *process, KAPC_STATE *apc_state)
+void WINAPI KeStackAttachProcess(KPROCESS *process, KAPC_STATE *state)
 {
-    FIXME("process %p, apc_state %p stub.\n", process, apc_state);
+    PKTHREAD thread = KeGetCurrentThread();
+    NTSTATUS stat;
+
+    TRACE("%p %p\n", process, state);
+
+    state->Process = thread->process;
+    thread->process = process;
+
+    SERVER_START_REQ(attach_process)
+    {
+        req->manager = wine_server_obj_handle(get_device_manager());
+        req->detach = 0;
+        req->process = wine_server_client_ptr(process);
+        stat = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+
+    if (stat)
+        ERR("%x\n", stat);
 }
 
-void WINAPI KeUnstackDetachProcess(KAPC_STATE *apc_state)
+void WINAPI KeUnstackDetachProcess(KAPC_STATE *state)
 {
-    FIXME("apc_state %p stub.\n", apc_state);
+    PKTHREAD thread = KeGetCurrentThread();
+    NTSTATUS stat;
+
+    TRACE("%p\n", state);
+
+    thread->process = state->Process;
+
+    SERVER_START_REQ(attach_process)
+    {
+        req->manager = wine_server_obj_handle(get_device_manager());
+        req->detach = 1;
+        req->process = wine_server_client_ptr(state->Process);
+        stat = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+
+    if (stat)
+        ERR("%x\n", stat);
 }
 
 NTSTATUS WINAPI KdDisableDebugger(void)

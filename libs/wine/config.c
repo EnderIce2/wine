@@ -501,13 +501,13 @@ const char *wine_get_user_name_obsolete(void)
 }
 
 /* return the standard version string */
-const char *wine_get_version_obsolete(void)
+const char *tuica_get_version_obsolete(void)
 {
     return PACKAGE_VERSION;
 }
 
 /* return the build id string */
-const char *wine_get_build_id_obsolete(void)
+const char *tuica_get_build_id_obsolete(void)
 {
     return PACKAGE_VERSION;
 }
@@ -624,12 +624,12 @@ void wine_exec_wine_binary_obsolete( const char *name, char **argv, const char *
 
 __ASM_OBSOLETE(wine_init_argv0_path);
 __ASM_OBSOLETE(wine_get_build_dir);
-__ASM_OBSOLETE(wine_get_build_id);
+__ASM_OBSOLETE(tuica_get_build_id);
 __ASM_OBSOLETE(wine_get_config_dir);
 __ASM_OBSOLETE(wine_get_data_dir);
 __ASM_OBSOLETE(wine_get_server_dir);
 __ASM_OBSOLETE(wine_get_user_name);
-__ASM_OBSOLETE(wine_get_version);
+__ASM_OBSOLETE(tuica_get_version);
 __ASM_OBSOLETE(wine_exec_wine_binary);
 
 #endif /* __ASM_OBSOLETE */

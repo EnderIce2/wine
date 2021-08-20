@@ -43,6 +43,9 @@ static inline LPCSTR debugstr_us( const UNICODE_STRING *us )
     return debugstr_wn( us->Buffer, us->Length / sizeof(WCHAR) );
 }
 
+#define TO_USER(x) (typeof(x)) ((ULONG_PTR)x & 0x0000ffffffffffff)
+#define TO_KRNL(x) (PVOID) (x ? (ULONG_PTR)x | 0xffff000000000000 : (ULONG_PTR)x)
+
 struct _OBJECT_TYPE
 {
     const WCHAR *name;            /* object type name used for type validation */
@@ -59,6 +62,9 @@ struct _EPROCESS
     DISPATCHER_HEADER header;
     PROCESS_BASIC_INFORMATION info;
     BOOL wow64;
+    /* TODO: we should store a section object here instead */
+    PFILE_OBJECT file_object;
+    PVOID section_base_address;
 };
 
 struct _KTHREAD
@@ -68,6 +74,10 @@ struct _KTHREAD
     CLIENT_ID id;
     unsigned int critical_region;
     KAFFINITY user_affinity;
+    LIST_ENTRY ApcListHead[2];
+    CRITICAL_SECTION apc_cs;
+    HANDLE apc_event;
+    HANDLE imposter_thread;
 };
 
 struct _ETHREAD

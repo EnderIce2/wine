@@ -37,6 +37,7 @@
 #include "process.h"
 #include "thread.h"
 #include "security.h"
+#include "device.h"
 #include "request.h"
 
 struct handle_entry
@@ -256,15 +257,45 @@ static obj_handle_t alloc_handle_entry( struct process *process, void *ptr,
                                         unsigned int access, unsigned int attr )
 {
     struct object *obj = ptr;
+    obj_handle_t res;
 
     assert( !(access & RESERVED_ALL) );
     if (attr & OBJ_INHERIT) access |= RESERVED_INHERIT;
+    if (attr & OBJ_FROM_KERNEL)
+    {
+        if (current->process == process && process->is_kernel && current->attached_process && !(attr & OBJ_KERNEL_HANDLE))
+        {
+            process = current->attached_process;
+        }
+    }
     if (!process->handles)
     {
         set_error( STATUS_PROCESS_IS_TERMINATING );
         return 0;
     }
-    return alloc_entry( process->handles, obj, access );
+    res = alloc_entry( process->handles, obj, access );
+    if (process->is_kernel)
+        res |= KERNEL_HANDLE_FLAG;
+
+    return res;
+}
+
+void queue_handle_callback(struct process *process, struct object *obj, unsigned int access, obj_handle_t res)
+{
+    if (is_process(obj) || is_thread(obj))
+    {
+        krnl_cbdata_t cbdata;
+        cbdata.cb_type = SERVER_CALLBACK_HANDLE_EVENT;
+        cbdata.handle_event.op_type = is_process(obj) ? CREATE_PROC : CREATE_THRD;
+        cbdata.handle_event.access = access;
+        cbdata.handle_event.status = get_error();
+        cbdata.handle_event.target_pid = process->id;
+        grab_object(obj);
+        cbdata.handle_event.object = (obj_handle_t) (((unsigned long int)obj) >> 32);
+        cbdata.handle_event.padding = (unsigned int) (unsigned long int) obj;
+
+        queue_callback(&cbdata, NULL, NULL);
+    }
 }
 
 /* allocate a handle for an object, incrementing its refcount */
@@ -272,9 +303,14 @@ static obj_handle_t alloc_handle_entry( struct process *process, void *ptr,
 obj_handle_t alloc_handle_no_access_check( struct process *process, void *ptr, unsigned int access, unsigned int attr )
 {
     struct object *obj = ptr;
+    obj_handle_t res;
     if (access & MAXIMUM_ALLOWED) access = GENERIC_ALL;
     access = obj->ops->map_access( obj, access ) & ~RESERVED_ALL;
-    return alloc_handle_entry( process, ptr, access, attr );
+    res = alloc_handle_entry( process, ptr, access, attr );
+
+    queue_handle_callback(process, obj, access, res);
+
+    return res;
 }
 
 /* allocate a handle for an object, checking the dacl allows the process to */
@@ -283,9 +319,14 @@ obj_handle_t alloc_handle_no_access_check( struct process *process, void *ptr, u
 obj_handle_t alloc_handle( struct process *process, void *ptr, unsigned int access, unsigned int attr )
 {
     struct object *obj = ptr;
+    obj_handle_t res = 0;
     access = obj->ops->map_access( obj, access ) & ~RESERVED_ALL;
-    if (access && !check_object_access( NULL, obj, &access )) return 0;
-    return alloc_handle_entry( process, ptr, access, attr );
+    if (!access || check_object_access( NULL, obj, &access ))
+        res = alloc_handle_entry( process, ptr, access, attr );
+
+    queue_handle_callback(process, obj, access, res);
+
+    return res;
 }
 
 /* allocate a global handle for an object, incrementing its refcount */
@@ -317,10 +358,44 @@ static struct handle_entry *get_handle( struct process *process, obj_handle_t ha
     struct handle_entry *entry;
     int index;
 
+    if (handle == 0)
+        return NULL;
+
     if (handle_is_global(handle))
     {
         handle = handle_global_to_local(handle);
         table = global_table;
+    }
+    if (process->is_kernel)
+    {
+        if (handle & KERNEL_HANDLE_FLAG)
+            handle &= ~KERNEL_HANDLE_FLAG;
+        else
+        {
+            struct thread *client_thread;
+
+            if (!process->dev_mgr)
+            {
+                set_error( STATUS_INVALID_HANDLE );
+                return NULL;
+            }
+
+            if (current->attached_process)
+            {
+                process = current->attached_process;
+            }
+            else if ((client_thread = device_manager_client_thread(process->dev_mgr, current)))
+            {
+                process = client_thread->process;
+                release_object(client_thread);
+            }
+            else
+            {
+                set_error( STATUS_INVALID_HANDLE );
+                return NULL;
+            }
+
+        }
     }
     if (!table) return NULL;
     index = handle_to_index( handle );
@@ -669,6 +744,27 @@ DECL_HANDLER(dup_handle)
         {
             reply->handle = duplicate_handle( src, req->src_handle, dst,
                                               req->access, req->attributes, req->options );
+
+            {
+                struct object *obj = get_handle_obj( src, req->src_handle, 0, NULL );
+
+                if (is_process(obj) || is_thread(obj))
+                {
+                    krnl_cbdata_t cbdata;
+                    cbdata.cb_type = SERVER_CALLBACK_HANDLE_EVENT;
+                    cbdata.handle_event.op_type = is_process(obj) ? DUP_PROC : DUP_THRD;
+                    cbdata.handle_event.access = req->access;
+                    cbdata.handle_event.status = get_error();
+                    grab_object(obj);
+                    cbdata.handle_event.object = (obj_handle_t) (((unsigned long int)obj) >> 32);
+                    cbdata.handle_event.padding = (unsigned int) (unsigned long int) obj;
+                    cbdata.handle_event.source_pid = src->id;
+                    cbdata.handle_event.target_pid = dst->id;
+
+                    queue_callback(&cbdata, NULL, NULL);
+                }
+                release_object(obj);
+            }
             release_object( dst );
         }
         /* close the handle no matter what happened */

@@ -58,6 +58,7 @@ struct thread
     struct msg_queue      *queue;         /* message queue */
     struct thread_wait    *wait;          /* current wait condition if sleeping */
     struct list            system_apc;    /* queue of system async procedure calls */
+    struct list            kernel_apc;    /* queue of kernel async procedure calls */
     struct list            user_apc;      /* queue of user async procedure calls */
     struct inflight_fd     inflight[MAX_INFLIGHT_FDS];  /* fds currently in flight */
     unsigned int           error;         /* current error code */
@@ -90,6 +91,9 @@ struct thread
     struct list            kernel_object; /* list of kernel object pointers */
     data_size_t            desc_len;      /* thread description length in bytes */
     WCHAR                 *desc;          /* thread description string */
+    struct object         *callback_init_event;
+    struct process * attached_process;
+    int                    esync_apc_fd;
 };
 
 extern struct thread *current;
@@ -122,6 +126,7 @@ extern struct token *thread_get_impersonation_token( struct thread *thread );
 extern int set_thread_affinity( struct thread *thread, affinity_t affinity );
 extern int suspend_thread( struct thread *thread );
 extern int resume_thread( struct thread *thread );
+extern int is_thread( struct object *obj );
 
 /* ptrace functions */
 

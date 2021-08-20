@@ -63,7 +63,7 @@ struct reply_header
 /* this is used to construct the generic_request union */
 struct request_max_size
 {
-    int pad[16]; /* the max request size is 16 ints */
+    int pad[18]; /* the max request size is 18 ints */
 };
 
 #define FIRST_USER_HANDLE 0x0020  /* first possible value for low word of user handle */
@@ -116,6 +116,7 @@ typedef union
         int          dbg_offset; /* offset of debug info in file */
         int          dbg_size;   /* size of debug info */
         client_ptr_t name;       /* image name (optional) */
+        obj_handle_t processed_event; /* signals when "kernel" callbacks are done with it */
     } load_dll;
     struct
     {
@@ -487,7 +488,9 @@ enum apc_type
     APC_UNMAP_VIEW,
     APC_CREATE_THREAD,
     APC_DUP_HANDLE,
-    APC_BREAK_PROCESS
+    APC_BREAK_PROCESS,
+    APC_REAL_USER,
+    APC_REAL_KERNEL,
 };
 
 typedef struct
@@ -595,6 +598,11 @@ typedef union
         unsigned int     attributes;   /* object attributes */
         unsigned int     options;      /* duplicate options */
     } dup_handle;
+    struct
+    {
+        enum apc_type    type;      /* APC_REAL_KERNEL && APC_REAL_USER */
+        int special_apc;
+    } real_apc;
 } apc_call_t;
 
 typedef union
@@ -897,6 +905,7 @@ typedef struct
 @REPLY
     client_ptr_t entry;        /* process entry point */
     int          suspend;      /* is process suspended? */
+    obj_handle_t processed_event;
 @END
 
 
@@ -913,6 +922,7 @@ typedef struct
     timeout_t    server_start; /* server start time */
     unsigned int session_id;   /* process session id */
     data_size_t  info_size;    /* total size of startup info */
+    obj_handle_t processed_event;
     VARARG(machines,ushorts);  /* array of supported machines */
 @END
 
@@ -926,6 +936,7 @@ typedef struct
     client_ptr_t entry;        /* entry point (in thread address space) */
 @REPLY
     int          suspend;      /* is thread suspended? */
+    obj_handle_t processed_event;
 @END
 
 
@@ -1057,6 +1068,16 @@ typedef struct
 #define SET_THREAD_INFO_DESCRIPTION 0x10
 #define SET_THREAD_INFO_DBG_HIDDEN  0x20
 
+/* outdated req but whatever */
+@REQ(get_dll_info)
+    obj_handle_t handle;       /* process handle */
+    mod_handle_t base_address; /* base address of module */
+@REPLY
+    client_ptr_t entry_point;
+    mod_handle_t base_address;
+    data_size_t  filename_len;    /* buffer len in bytes required to store filename */
+    VARARG(filename,unicode_str); /* file name of module */
+@END
 
 /* Suspend a thread */
 @REQ(suspend_thread)
@@ -1083,6 +1104,10 @@ typedef struct
     int          self;         /* run APC in caller itself? */
 @END
 
+@REQ(finalize_apc)
+    obj_handle_t handle;       /* handle to the apc */
+    apc_call_t   call;         /* real call */
+@END
 
 /* Get the result of an APC call */
 @REQ(get_apc_result)
@@ -1091,6 +1116,7 @@ typedef struct
     apc_result_t result;       /* result of the APC */
 @END
 
+#define KERNEL_HANDLE_FLAG 0x8000000
 
 /* Close a handle for the current process */
 @REQ(close_handle)
@@ -1595,6 +1621,14 @@ struct poll_socket_output
 /* Unmap a memory view from the current process */
 @REQ(unmap_view)
     client_ptr_t base;          /* view base address */
+@END
+
+/* Get file for a mapping */
+@REQ(get_mapping_file)
+    obj_handle_t process;       /* process handle */
+    client_ptr_t addr;          /* arbitrary address in view */
+@REPLY
+    obj_handle_t handle;        /* handle to file */
 @END
 
 
@@ -3454,10 +3488,78 @@ struct handle_info
     obj_handle_t manager;         /* handle to the device manager */
     client_ptr_t user_ptr;        /* kernel object pointer */
     unsigned int access;          /* wanted access rights */
+    unsigned int attributes;
 @REPLY
     obj_handle_t handle;          /* kernel object handle */
 @END
 
+
+@REQ(callback_subscribe)
+    obj_handle_t manager;
+    int callback_mask;
+@END
+
+enum operation_type { CREATE_PROC, DUP_PROC, CREATE_THRD, DUP_THRD };
+
+typedef union
+{
+    int cb_type;
+    struct
+    {
+        int cb_type;
+        int create;   /* creation or destruction */
+        process_id_t pid;
+        process_id_t ppid;
+    } process_life;
+    struct
+    {
+        int cb_type;
+        int create;   /* creation or destruction */
+        process_id_t pid;
+        thread_id_t tid;
+    } thread_life;
+    struct
+    {
+        int cb_type;
+        process_id_t pid;
+        client_ptr_t base;
+        mem_size_t size;
+    } image_life;
+    struct
+    {
+        int cb_type;
+        enum operation_type op_type;
+        unsigned int access;
+        unsigned int status;
+        process_id_t source_pid;
+        process_id_t target_pid;
+        obj_handle_t object;
+        unsigned int padding;
+    } handle_event;
+} krnl_cbdata_t;
+
+enum kernel_callback_type
+{
+    SERVER_CALLBACK_PROC_LIFE = 0x1,
+    SERVER_CALLBACK_THRD_LIFE = 0x2,
+    SERVER_CALLBACK_IMAGE_LIFE = 0x4,
+    SERVER_CALLBACK_HANDLE_EVENT = 0x8
+};
+
+@REQ(get_next_callback_event)
+    obj_handle_t manager;
+@REPLY
+    krnl_cbdata_t cb_data;
+    thread_id_t   client_tid;
+    client_ptr_t  client_thread;
+    VARARG(string_paramenter,unicode_str); /* type defined meaning */
+@END
+
+@REQ(attach_process)
+    obj_handle_t manager;
+    client_ptr_t process;
+    int detach;
+@END
 
 /* Make the current process a system process */
 @REQ(make_process_system)

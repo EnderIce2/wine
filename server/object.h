@@ -167,6 +167,8 @@ extern void release_object( void *obj );
 extern struct object *find_object( const struct namespace *namespace, const struct unicode_str *name,
                                    unsigned int attributes );
 extern struct object *find_object_index( const struct namespace *namespace, unsigned int index );
+extern struct object_type *no_get_type( struct object *obj );
+extern unsigned int no_map_access( struct object *obj, unsigned int access );
 extern int no_add_queue( struct object *obj, struct wait_queue_entry *entry );
 extern void no_satisfied( struct object *obj, struct wait_queue_entry *entry );
 extern int no_signal( struct object *obj, unsigned int access );
@@ -184,6 +186,7 @@ extern void default_unlink_name( struct object *obj, struct object_name *name );
 extern struct object *no_open_file( struct object *obj, unsigned int access, unsigned int sharing,
                                     unsigned int options );
 extern struct list *no_kernel_obj_list( struct object *obj );
+extern void no_alloc_handle( struct object *obj, struct process *process, obj_handle_t handle );
 extern int no_close_handle( struct object *obj, struct process *process, obj_handle_t handle );
 extern void no_destroy( struct object *obj );
 #ifdef DEBUG_OBJECTS
