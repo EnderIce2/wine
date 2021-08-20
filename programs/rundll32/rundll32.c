@@ -322,9 +322,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE hOldInstance, LPWSTR szCmdLine
     if (!entry_point)
     {
         /* Windows has a MessageBox here... */
+        WINE_ERR("Unable to find the entry point %s in %s\n", wine_dbgstr_w(szEntryPoint), wine_dbgstr_w(szDllName));
         MessageBoxW(hWnd, (LPCWSTR)L"Unable to find the entry point\nCheck the log for more informations", (LPCWSTR)L"EntryPoint not found", MB_ICONASTERISK | MB_OK | MB_DEFBUTTON1);
-        WINE_ERR( "Unable to find the entry point %s in %s\n",
-                  wine_dbgstr_w(szEntryPoint), wine_dbgstr_w(szDllName) );
         goto CLEANUP;
     }
 
