@@ -1517,6 +1517,7 @@
 @ stdcall -private ZwSetVolumeInformationFile(long ptr ptr long long) NtSetVolumeInformationFile
 @ stdcall -private ZwTerminateJobObject(long long) NtTerminateJobObject
 @ stdcall -private ZwTerminateProcess(long long) NtTerminateProcess
+@ stdcall -private ZwTraceControl(long ptr long ptr long long) NtTraceControl
 @ stub ZwTranslateFilePath
 @ stdcall ZwUnloadDriver(ptr)
 @ stdcall -private ZwUnloadKey(ptr) NtUnloadKey
