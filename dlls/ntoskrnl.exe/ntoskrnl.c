@@ -4587,16 +4587,17 @@ NTSTATUS WINAPI MmCopyMemory(PVOID TargetAddress, MM_COPY_ADDRESS SourceAddress,
 }
 
 // NtTraceControl and ZwTraceControl are not documented on micro$oft forums or whatever, that's why i am implemented stubs with return code STATUS_SUCCESS.
+// no longer needed here because wine is implemented in another location
 
 /***********************************************************************
  *              NtTraceControl   (NTOSKRNL.EXE.@)
  */
-NTSTATUS NTAPI NtTraceControl(ETW_FUNCTION_CODE Operation, LPVOID InputBuffer, DWORD InputSize, LPVOID OutputBuffer, DWORD OutputSize, LPDWORD BytesReturned)
-{
-    *BytesReturned = InputSize;
-    FIXME("%d %p %p %u %n\n", Operation, InputBuffer, OutputBuffer, OutputSize, BytesReturned);
-    return STATUS_SUCCESS;
-}
+// NTSTATUS NTAPI NtTraceControl(ETW_FUNCTION_CODE Operation, LPVOID InputBuffer, DWORD InputSize, LPVOID OutputBuffer, DWORD OutputSize, LPDWORD BytesReturned)
+// {
+//     *BytesReturned = InputSize;
+//     FIXME("%d %p %p %u %n\n", Operation, InputBuffer, OutputBuffer, OutputSize, BytesReturned);
+//     return STATUS_SUCCESS;
+// }
 
 /***********************************************************************
  *              ZwTraceControl   (NTOSKRNL.EXE.@)
