@@ -204,19 +204,19 @@ NTSTATUS WINAPI NtQueryInformationToken(HANDLE token, TOKEN_INFORMATION_CLASS cl
     }
     if (!once_NtQueryInformationToken++)
     {
-        if (priv == 0)
+        if (strcmp( priv, "0" ))
         {
-            WINE_MESSAGE("-> Process will get the privilege from REQ\n");
+            WINE_MESSAGE("-> Process will get the privilege from REQ call\n");
         }
-        else if (priv == 1)
+        else if (strcmp( priv, "1" ))
         {
             WINE_MESSAGE("-> Process will start with default privilege\n");
         }
-        else if (priv == 2)
+        else if (strcmp( priv, "2" ))
         {
             WINE_MESSAGE("-> Process will start with full privilege\n");
         }
-        else if (priv == 3)
+        else if (strcmp( priv, "3" ))
         {
             WINE_MESSAGE("-> Process will start with limited privilege\n");
         }
@@ -438,7 +438,7 @@ NTSTATUS WINAPI NtQueryInformationToken(HANDLE token, TOKEN_INFORMATION_CLASS cl
         break;
 
     case TokenElevationType:
-        if (priv == 0)
+        if (strcmp( priv, "0" ))
         {
             SERVER_START_REQ(get_token_info)
             {
@@ -454,17 +454,17 @@ NTSTATUS WINAPI NtQueryInformationToken(HANDLE token, TOKEN_INFORMATION_CLASS cl
         else
         {
             TOKEN_ELEVATION_TYPE *type = info;
-            if (priv == 0)
+            if (strcmp( priv, "1" ))
                 *type = TokenElevationTypeDefault;
-            if (priv == 1)
+            if (strcmp( priv, "3" ))
                 *type = TokenElevationTypeLimited;
-            if (priv == 2)
+            if (strcmp( priv, "2" ))
                 *type = TokenElevationTypeFull;
         }
         break;
 
     case TokenElevation:
-        if (priv == 0)
+        if (strcmp( priv, "0" ))
         {
             SERVER_START_REQ(get_token_info)
             {
@@ -480,11 +480,11 @@ NTSTATUS WINAPI NtQueryInformationToken(HANDLE token, TOKEN_INFORMATION_CLASS cl
         else
         {
             TOKEN_ELEVATION *elevation = info;
-            if (priv == 0)
+            if (strcmp( priv, "1" ))
                 elevation->TokenIsElevated = FALSE;
-            if (priv == 1)
+            if (strcmp( priv, "3" ))
                 elevation->TokenIsElevated = FALSE;
-            if (priv == 2)
+            if (strcmp( priv, "2" ))
                 elevation->TokenIsElevated = TRUE;
         }
         break;

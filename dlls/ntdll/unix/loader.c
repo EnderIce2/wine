@@ -995,13 +995,15 @@ static void *callback_module;
  */
 static void load_builtin_callback( void *module, const char *filename )
 {
-    // HANDLE processed_event;
+    FIXME("load_builtin_callback not fully implemented yet\n");
+    HANDLE processed_event;
     // processed_event = wine_server_ptr_handle(reply->processed_event);
-    // if (processed_event)
-    // {
-    //     NtWaitForSingleObject(processed_event, FALSE, NULL);
-    //     NtClose(processed_event);
-    // }
+    if (processed_event)
+    {
+        ERR("processed_event was true even though it was not implemented yet\n");
+        NtWaitForSingleObject(processed_event, FALSE, NULL);
+        NtClose(processed_event);
+    }
     callback_module = module;
 }
 
@@ -1131,6 +1133,7 @@ static NTSTATUS dlopen_dll( const char *so_name, UNICODE_STRING *nt_name, void *
     // processed_event = wine_server_ptr_handle(reply->processed_event);
     if (processed_event)
     {
+        FIXME("processed_event will be called");
         NtWaitForSingleObject(processed_event, FALSE, NULL);
         NtClose(processed_event);
     }

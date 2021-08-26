@@ -905,7 +905,7 @@ static union fd_cache_entry fd_cache_initial_block[FD_CACHE_BLOCK_SIZE];
 static inline unsigned int handle_to_index( HANDLE handle, unsigned int *entry )
 {
     // unsigned int idx = (wine_server_obj_handle(handle) >> 2) - 1;
-    unsigned int idx = ((wine_server_obj_handle(handle) & ~KERNEL_HANDLE_FLAG) >> 2) - 1;
+    //unsigned int idx = ((wine_server_obj_handle(handle) & ~KERNEL_HANDLE_FLAG) >> 2) - 1;
     *entry = idx / FD_CACHE_BLOCK_SIZE;
     return idx % FD_CACHE_BLOCK_SIZE;
 }
@@ -1441,6 +1441,7 @@ size_t server_init_process(void)
 {
     const char *arch = getenv( "WINEARCH" );
     const char *env_socket = getenv( "WINESERVERSOCKET" );
+    const char *priv = getenv( "WINEPRIV" );
     obj_handle_t version;
     unsigned int i;
     int ret, reply_pipe;
@@ -1463,6 +1464,13 @@ size_t server_init_process(void)
 
         if (arch && strcmp( arch, "win32" ) && strcmp( arch, "win64" ))
             fatal_error( "WINEARCH set to invalid value '%s', it must be either win32 or win64.\n", arch );
+
+        fd_socket = server_connect();
+
+        const char *priv = getenv( "WINEPRIV" );
+
+        if (priv && priv == NULL && strcmp( priv, "0" ) && strcmp( priv, "1" ) && strcmp( priv, "2" ) && strcmp( priv, "3" ))
+            fatal_error( "WINEPRIV set to invalid value '%s', it must be 0 for REQ privilege, 1 for default privilege, 2 for full privilege and 3 for full limited privilege.\n", priv );
 
         fd_socket = server_connect();
     }
@@ -1613,6 +1621,7 @@ void server_init_process_done(void)
     assert( !status );
     if (processed_event)
     {
+        fprintf( stdout, "wine: processed_event vas true in server_init_process_done\n" );
         NtWaitForSingleObject(processed_event, FALSE, NULL);
         NtClose(processed_event);
     }
