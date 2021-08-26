@@ -1579,9 +1579,9 @@ error:
 
 
 /***********************************************************************
- *           D3DKMTCreateDCFromMemory    (GDI32.@)
+ *           NtGdiDdDDICreateDCFromMemory    (win32u.@)
  */
-NTSTATUS WINAPI D3DKMTCreateDCFromMemory( D3DKMT_CREATEDCFROMMEMORY *desc )
+NTSTATUS WINAPI NtGdiDdDDICreateDCFromMemory( D3DKMT_CREATEDCFROMMEMORY *desc )
 {
     const struct d3dddi_format_info
     {
@@ -1687,15 +1687,15 @@ NTSTATUS WINAPI D3DKMTCreateDCFromMemory( D3DKMT_CREATEDCFROMMEMORY *desc )
 error:
     if (bmp) HeapFree( GetProcessHeap(), 0, bmp->color_table );
     HeapFree( GetProcessHeap(), 0, bmp );
-    DeleteDC( dc );
+    NtGdiDeleteObjectApp( dc );
     return STATUS_INVALID_PARAMETER;
 }
 
 
 /***********************************************************************
- *           D3DKMTDestroyDCFromMemory    (GDI32.@)
+ *           NtGdiDdDDIDestroyDCFromMemory    (win32u.@)
  */
-NTSTATUS WINAPI D3DKMTDestroyDCFromMemory( const D3DKMT_DESTROYDCFROMMEMORY *desc )
+NTSTATUS WINAPI NtGdiDdDDIDestroyDCFromMemory( const D3DKMT_DESTROYDCFROMMEMORY *desc )
 {
     if (!desc) return STATUS_INVALID_PARAMETER;
 
@@ -1704,7 +1704,7 @@ NTSTATUS WINAPI D3DKMTDestroyDCFromMemory( const D3DKMT_DESTROYDCFROMMEMORY *des
     if (GetObjectType( desc->hDc ) != OBJ_MEMDC ||
         GetObjectType( desc->hBitmap ) != OBJ_BITMAP) return STATUS_INVALID_PARAMETER;
     DeleteObject( desc->hBitmap );
-    DeleteDC( desc->hDc );
+    NtGdiDeleteObjectApp( desc->hDc );
 
     return STATUS_SUCCESS;
 }

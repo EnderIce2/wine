@@ -80,8 +80,8 @@ static void set_initial_dc_state( DC *dc )
     dc->attr->vport_ext.cy  = 1;
     dc->attr->miter_limit   = 10.0f; /* 10.0 is the default, from MSDN */
     dc->attr->layout        = 0;
-    dc->font_code_page      = CP_ACP;
     dc->attr->rop_mode      = R2_COPYPEN;
+    dc->attr->font_code_page   = CP_ACP;
     dc->attr->poly_fill_mode   = ALTERNATE;
     dc->attr->stretch_blt_mode = BLACKONWHITE;
     dc->attr->rel_abs_mode     = ABSOLUTE;
@@ -256,15 +256,6 @@ void update_dc( DC *dc )
 }
 
 
-/***********************************************************************
- *           DC_DeleteObject
- */
-static BOOL DC_DeleteObject( HGDIOBJ handle )
-{
-    return DeleteDC( handle );
-}
-
-
 static void set_bk_color( DC *dc, COLORREF color )
 {
     PHYSDEV physdev = GET_DC_PHYSDEV( dc, pSetBkColor );
@@ -411,7 +402,7 @@ static BOOL reset_dc_state( HDC hdc )
     NtGdiSetVirtualResolution( hdc, 0, 0, 0, 0 );
     GDISelectPalette( hdc, GetStockObject( DEFAULT_PALETTE ), FALSE );
     NtGdiSetBoundsRect( hdc, NULL, DCB_DISABLE );
-    AbortPath( hdc );
+    NtGdiAbortPath( hdc );
 
     if (dc->hClipRgn) DeleteObject( dc->hClipRgn );
     if (dc->hMetaRgn) DeleteObject( dc->hMetaRgn );
@@ -427,6 +418,37 @@ static BOOL reset_dc_state( HDC hdc )
     dc->saved_dc = NULL;
     dc->attr->save_level = 0;
     release_dc_ptr( dc );
+    return TRUE;
+}
+
+
+/***********************************************************************
+ *           DC_DeleteObject
+ */
+static BOOL DC_DeleteObject( HGDIOBJ handle )
+{
+    DC *dc;
+
+    TRACE( "%p\n", handle );
+
+    GDI_CheckNotLock();
+
+    if (!(dc = get_dc_ptr( handle ))) return FALSE;
+    if (dc->refcount != 1)
+    {
+        FIXME( "not deleting busy DC %p refcount %u\n", dc->hSelf, dc->refcount );
+        release_dc_ptr( dc );
+        return FALSE;
+    }
+
+    /* Call hook procedure to check whether is it OK to delete this DC */
+    if (dc->hookProc && !dc->hookProc( dc->hSelf, DCHC_DELETEDC, dc->dwHookData, 0 ))
+    {
+        release_dc_ptr( dc );
+        return TRUE;
+    }
+    reset_dc_state( handle );
+    free_dc_ptr( dc );
     return TRUE;
 }
 
@@ -737,50 +759,18 @@ HDC WINAPI NtGdiCreateCompatibleDC( HDC hdc )
 
 
 /***********************************************************************
- *           DeleteDC    (GDI32.@)
+ *           NtGdiResetDC    (win32u.@)
  */
-BOOL WINAPI DeleteDC( HDC hdc )
-{
-    DC * dc;
-
-    TRACE("%p\n", hdc );
-
-    if (is_meta_dc( hdc )) return METADC_DeleteDC( hdc );
-
-    GDI_CheckNotLock();
-
-    if (!(dc = get_dc_ptr( hdc ))) return FALSE;
-    if (dc->refcount != 1)
-    {
-        FIXME( "not deleting busy DC %p refcount %u\n", dc->hSelf, dc->refcount );
-        release_dc_ptr( dc );
-        return FALSE;
-    }
-
-    /* Call hook procedure to check whether is it OK to delete this DC */
-    if (dc->hookProc && !dc->hookProc( dc->hSelf, DCHC_DELETEDC, dc->dwHookData, 0 ))
-    {
-        release_dc_ptr( dc );
-        return TRUE;
-    }
-    reset_dc_state( hdc );
-    free_dc_ptr( dc );
-    return TRUE;
-}
-
-
-/***********************************************************************
- *           ResetDCW    (GDI32.@)
- */
-HDC WINAPI ResetDCW( HDC hdc, const DEVMODEW *devmode )
+BOOL WINAPI NtGdiResetDC( HDC hdc, const DEVMODEW *devmode, BOOL *banding,
+                          DRIVER_INFO_2W *driver_info, void *dev )
 {
     DC *dc;
-    HDC ret = 0;
+    BOOL ret = FALSE;
 
     if ((dc = get_dc_ptr( hdc )))
     {
         PHYSDEV physdev = GET_DC_PHYSDEV( dc, pResetDC );
-        ret = physdev->funcs->pResetDC( physdev, devmode );
+        ret = physdev->funcs->pResetDC( physdev, devmode ) != 0;
         if (ret)  /* reset the visible region */
         {
             dc->dirty = 0;
@@ -788,7 +778,7 @@ HDC WINAPI ResetDCW( HDC hdc, const DEVMODEW *devmode )
             dc->attr->vis_rect.top    = 0;
             dc->attr->vis_rect.right  = GetDeviceCaps( hdc, DESKTOPHORZRES );
             dc->attr->vis_rect.bottom = GetDeviceCaps( hdc, DESKTOPVERTRES );
-            if (dc->hVisRgn) DeleteObject( dc->hVisRgn );
+            if (dc->hVisRgn) NtGdiDeleteObjectApp( dc->hVisRgn );
             dc->hVisRgn = 0;
             update_dc_clipping( dc );
         }
@@ -996,7 +986,7 @@ BOOL WINAPI CombineTransform( LPXFORM xformResult, const XFORM *xform1,
 
 
 /***********************************************************************
- *           SetDCHook   (GDI32.@)
+ *           SetDCHook   (win32u.@)
  *
  * Note: this doesn't exist in Win32, we add it here because user32 needs it.
  */
@@ -1014,7 +1004,7 @@ BOOL WINAPI SetDCHook( HDC hdc, DCHOOKPROC hookProc, DWORD_PTR dwHookData )
 
 
 /***********************************************************************
- *           GetDCHook   (GDI32.@)
+ *           GetDCHook   (win32u.@)
  *
  * Note: this doesn't exist in Win32, we add it here because user32 needs it.
  */
@@ -1032,7 +1022,7 @@ DWORD_PTR WINAPI GetDCHook( HDC hdc, DCHOOKPROC *proc )
 
 
 /***********************************************************************
- *           SetHookFlags   (GDI32.@)
+ *           SetHookFlags   (win32u.@)
  *
  * Note: this doesn't exist in Win32, we add it here because user32 needs it.
  */

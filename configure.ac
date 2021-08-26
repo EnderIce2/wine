@@ -2186,6 +2186,7 @@ AC_CHECK_FUNCS(\
 	pipe2 \
 	poll \
 	port_create \
+	posix_fadvise \
 	prctl \
 	pread \
 	proc_pidinfo \
@@ -3088,7 +3089,9 @@ WINE_CONFIG_MAKEFILE(dlls/d3dx10_38)
 WINE_CONFIG_MAKEFILE(dlls/d3dx10_39)
 WINE_CONFIG_MAKEFILE(dlls/d3dx10_40)
 WINE_CONFIG_MAKEFILE(dlls/d3dx10_41)
+WINE_CONFIG_MAKEFILE(dlls/d3dx10_41/tests)
 WINE_CONFIG_MAKEFILE(dlls/d3dx10_42)
+WINE_CONFIG_MAKEFILE(dlls/d3dx10_42/tests)
 WINE_CONFIG_MAKEFILE(dlls/d3dx10_43)
 WINE_CONFIG_MAKEFILE(dlls/d3dx10_43/tests)
 WINE_CONFIG_MAKEFILE(dlls/d3dx11_42)

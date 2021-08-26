@@ -96,6 +96,19 @@ HDC WINAPI CreateICW( const WCHAR *driver, const WCHAR *device, const WCHAR *out
 }
 
 /***********************************************************************
+ *           DeleteDC    (GDI32.@)
+ */
+BOOL WINAPI DeleteDC( HDC hdc )
+{
+    DC_ATTR *dc_attr;
+
+    if (is_meta_dc( hdc )) return METADC_DeleteDC( hdc );
+    if (!(dc_attr = get_dc_attr( hdc ))) return FALSE;
+    if (dc_attr->emf) EMFDC_DeleteDC( dc_attr );
+    return NtGdiDeleteObjectApp( hdc );
+}
+
+/***********************************************************************
  *           ResetDCA    (GDI32.@)
  */
 HDC WINAPI ResetDCA( HDC hdc, const DEVMODEA *devmode )
@@ -110,6 +123,14 @@ HDC WINAPI ResetDCA( HDC hdc, const DEVMODEA *devmode )
 
     HeapFree( GetProcessHeap(), 0, devmodeW );
     return ret;
+}
+
+/***********************************************************************
+ *           ResetDCW    (GDI32.@)
+ */
+HDC WINAPI ResetDCW( HDC hdc, const DEVMODEW *devmode )
+{
+    return NtGdiResetDC( hdc, devmode, NULL, NULL, NULL ) ? hdc : 0;
 }
 
 /***********************************************************************

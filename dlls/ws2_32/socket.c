@@ -379,6 +379,8 @@ static BOOL socket_list_find( SOCKET socket )
 {
     unsigned int i;
 
+    if (!socket) return FALSE;
+
     EnterCriticalSection( &cs_socket_list );
     for (i = 0; i < socket_list_size; ++i)
     {
@@ -396,6 +398,8 @@ static BOOL socket_list_find( SOCKET socket )
 static BOOL socket_list_remove( SOCKET socket )
 {
     unsigned int i;
+
+    if (!socket) return FALSE;
 
     EnterCriticalSection(&cs_socket_list);
     for (i = 0; i < socket_list_size; ++i)
@@ -1362,6 +1366,13 @@ int WINAPI getsockopt( SOCKET s, int level, int optname, char *optval, int *optl
     TRACE("(socket %04lx, %s, optval %s, optlen %p (%d))\n", s,
           debugstr_sockopt(level, optname), debugstr_optval(optval, 0),
           optlen, optlen ? *optlen : 0);
+
+    if ((level != SOL_SOCKET || optname != SO_OPENTYPE) &&
+        !socket_list_find( s ))
+    {
+        SetLastError( WSAENOTSOCK );
+        return SOCKET_ERROR;
+    }
 
     switch(level)
     {

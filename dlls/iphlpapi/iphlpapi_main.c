@@ -864,7 +864,8 @@ ULONG adapters_addresses_size( IP_ADAPTER_ADDRESSES *info )
 void adapters_addresses_copy( IP_ADAPTER_ADDRESSES *dst, IP_ADAPTER_ADDRESSES *src )
 {
     char *ptr;
-    DWORD len, align = sizeof(ULONGLONG) - 1;
+    DWORD len;
+    UINT_PTR align = sizeof(ULONGLONG) - 1;
     struct address_entry_copy_params params;
 
     while (src)
@@ -1205,15 +1206,11 @@ static DWORD dns_info_alloc( IP_ADAPTER_ADDRESSES *aa, ULONG family, ULONG flags
                 }
             }
             if (servers != (DNS_ADDR_ARRAY *)buf) heap_free( servers );
-            if (err) goto err;
+            if (err) return err;
         }
 
         aa->DnsSuffix = heap_alloc( MAX_DNS_SUFFIX_STRING_LENGTH * sizeof(WCHAR) );
-        if (!aa->DnsSuffix)
-        {
-            err = ERROR_NOT_ENOUGH_MEMORY;
-            goto err;
-        }
+        if (!aa->DnsSuffix) return ERROR_NOT_ENOUGH_MEMORY;
         aa->DnsSuffix[0] = '\0';
 
         if (!DnsQueryConfig( DnsConfigSearchList, 0, name, NULL, NULL, &size ) &&
@@ -1230,8 +1227,7 @@ static DWORD dns_info_alloc( IP_ADAPTER_ADDRESSES *aa, ULONG family, ULONG flags
         aa = aa->Next;
     }
 
-err:
-    return err;
+    return ERROR_SUCCESS;
 }
 
 static DWORD adapters_addresses_alloc( ULONG family, ULONG flags, IP_ADAPTER_ADDRESSES **info )
@@ -1279,9 +1275,9 @@ static DWORD adapters_addresses_alloc( ULONG family, ULONG flags, IP_ADAPTER_ADD
             aa[i].FriendlyName = (WCHAR *)str_ptr;
             str_ptr += sizeof(rw[i].alias.String);
         }
-        aa[i].PhysicalAddressLength = rw->phys_addr.Length;
+        aa[i].PhysicalAddressLength = rw[i].phys_addr.Length;
         if (aa[i].PhysicalAddressLength > sizeof(aa[i].PhysicalAddress)) aa[i].PhysicalAddressLength = 0;
-        memcpy( aa[i].PhysicalAddress, rw->phys_addr.Address, aa[i].PhysicalAddressLength );
+        memcpy( aa[i].PhysicalAddress, rw[i].phys_addr.Address, aa[i].PhysicalAddressLength );
         aa[i].Mtu = dyn[i].mtu;
         aa[i].IfType = stat[i].type;
         aa[i].OperStatus = dyn[i].oper_status;

@@ -2436,8 +2436,10 @@ static inline BOOL handle_interrupt( ucontext_t *sigcontext, EXCEPTION_RECORD *r
         rec->ExceptionCode = STATUS_ASSERTION_FAILURE;
         break;
     case 0x2d:
-        switch (context->Rax)
+        if (CS_sig(sigcontext) == cs64_sel)
         {
+            switch (context->Rax)
+            {
             case 1: /* BREAKPOINT_PRINT */
             case 3: /* BREAKPOINT_LOAD_SYMBOLS */
             case 4: /* BREAKPOINT_UNLOAD_SYMBOLS */
@@ -2445,6 +2447,7 @@ static inline BOOL handle_interrupt( ucontext_t *sigcontext, EXCEPTION_RECORD *r
                 RIP_sig(sigcontext) += 3;
                 leave_handler( sigcontext );
                 return TRUE;
+            }
         }
         context->Rip += 3;
         rec->ExceptionCode = EXCEPTION_BREAKPOINT;
@@ -2664,6 +2667,7 @@ static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 static void fpe_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
     EXCEPTION_RECORD rec = { 0 };
+    ucontext_t *ucontext = sigcontext;
 
     switch (siginfo->si_code)
     {
@@ -2690,8 +2694,19 @@ static void fpe_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         break;
     case FPE_FLTINV:
     default:
-        rec.ExceptionCode = EXCEPTION_FLT_INVALID_OPERATION;
+        if (FPU_sig(ucontext) && FPU_sig(ucontext)->StatusWord & 0x40)
+            rec.ExceptionCode = EXCEPTION_FLT_STACK_CHECK;
+        else
+            rec.ExceptionCode = EXCEPTION_FLT_INVALID_OPERATION;
         break;
+    }
+
+    if (TRAP_sig(ucontext) == TRAP_x86_CACHEFLT)
+    {
+        rec.NumberParameters = 2;
+        rec.ExceptionInformation[0] = 0;
+        rec.ExceptionInformation[1] = FPU_sig(ucontext) ? FPU_sig(ucontext)->MxCsr : 0;
+        if (CS_sig(ucontext) != cs64_sel) rec.ExceptionCode = STATUS_FLOAT_MULTIPLE_TRAPS;
     }
     setup_exception( sigcontext, &rec );
 }

@@ -45,6 +45,7 @@
 
 #include <stdarg.h>
 #include <limits.h>
+#include <assert.h>
 
 #include "windef.h"
 #include "winbase.h"
@@ -670,6 +671,221 @@ cleanup:
 }
 
 /***********************************************************************
+ *           text_mbtowc
+ *
+ * Returns a Unicode translation of str using the charset of the
+ * currently selected font in hdc.  If count is -1 then str is assumed
+ * to be '\0' terminated, otherwise it contains the number of bytes to
+ * convert.  If plenW is non-NULL, on return it will point to the
+ * number of WCHARs that have been written.  If ret_cp is non-NULL, on
+ * return it will point to the codepage used in the conversion.  The
+ * caller should free the returned string from the process heap
+ * itself.
+ */
+static WCHAR *text_mbtowc( HDC hdc, const char *str, INT count, INT *plenW, UINT *ret_cp )
+{
+    UINT cp;
+    INT lenW;
+    LPWSTR strW;
+
+    cp = GdiGetCodePage( hdc );
+
+    if (count == -1) count = strlen( str );
+    lenW = MultiByteToWideChar( cp, 0, str, count, NULL, 0 );
+    strW = HeapAlloc( GetProcessHeap(), 0, lenW * sizeof(WCHAR) );
+    MultiByteToWideChar( cp, 0, str, count, strW, lenW );
+    TRACE( "mapped %s -> %s\n", debugstr_an(str, count), debugstr_wn(strW, lenW) );
+    if (plenW) *plenW = lenW;
+    if (ret_cp) *ret_cp = cp;
+    return strW;
+}
+
+static void text_metric_WtoA( const TEXTMETRICW *tmW, TEXTMETRICA *tmA )
+{
+    tmA->tmHeight = tmW->tmHeight;
+    tmA->tmAscent = tmW->tmAscent;
+    tmA->tmDescent = tmW->tmDescent;
+    tmA->tmInternalLeading = tmW->tmInternalLeading;
+    tmA->tmExternalLeading = tmW->tmExternalLeading;
+    tmA->tmAveCharWidth = tmW->tmAveCharWidth;
+    tmA->tmMaxCharWidth = tmW->tmMaxCharWidth;
+    tmA->tmWeight = tmW->tmWeight;
+    tmA->tmOverhang = tmW->tmOverhang;
+    tmA->tmDigitizedAspectX = tmW->tmDigitizedAspectX;
+    tmA->tmDigitizedAspectY = tmW->tmDigitizedAspectY;
+    tmA->tmFirstChar = min( tmW->tmFirstChar, 255 );
+    if (tmW->tmCharSet == SYMBOL_CHARSET)
+    {
+        tmA->tmFirstChar = 0x1e;
+        tmA->tmLastChar = 0xff;  /* win9x behaviour - we need the OS2 table data to calculate correctly */
+    }
+    else if (tmW->tmPitchAndFamily & TMPF_TRUETYPE)
+    {
+        tmA->tmFirstChar = tmW->tmDefaultChar - 1;
+        tmA->tmLastChar = min( tmW->tmLastChar, 0xff );
+    }
+    else
+    {
+        tmA->tmFirstChar = min( tmW->tmFirstChar, 0xff );
+        tmA->tmLastChar  = min( tmW->tmLastChar,  0xff );
+    }
+    tmA->tmDefaultChar = tmW->tmDefaultChar;
+    tmA->tmBreakChar = tmW->tmBreakChar;
+    tmA->tmItalic = tmW->tmItalic;
+    tmA->tmUnderlined = tmW->tmUnderlined;
+    tmA->tmStruckOut = tmW->tmStruckOut;
+    tmA->tmPitchAndFamily = tmW->tmPitchAndFamily;
+    tmA->tmCharSet = tmW->tmCharSet;
+}
+
+static void logfont_AtoW( const LOGFONTA *fontA, LPLOGFONTW fontW )
+{
+    memcpy( fontW, fontA, sizeof(LOGFONTA) - LF_FACESIZE );
+    MultiByteToWideChar( CP_ACP, 0, fontA->lfFaceName, -1, fontW->lfFaceName,
+                         LF_FACESIZE );
+    fontW->lfFaceName[LF_FACESIZE - 1] = 0;
+}
+
+static void logfontex_AtoW( const ENUMLOGFONTEXA *fontA, LPENUMLOGFONTEXW fontW )
+{
+    logfont_AtoW( &fontA->elfLogFont, &fontW->elfLogFont );
+
+    MultiByteToWideChar( CP_ACP, 0, (LPCSTR)fontA->elfFullName, -1,
+                         fontW->elfFullName, LF_FULLFACESIZE );
+    fontW->elfFullName[LF_FULLFACESIZE - 1] = '\0';
+    MultiByteToWideChar( CP_ACP, 0, (LPCSTR)fontA->elfStyle, -1,
+                         fontW->elfStyle, LF_FACESIZE );
+    fontW->elfStyle[LF_FACESIZE - 1] = '\0';
+    MultiByteToWideChar( CP_ACP, 0, (LPCSTR)fontA->elfScript, -1,
+                         fontW->elfScript, LF_FACESIZE );
+    fontW->elfScript[LF_FACESIZE - 1] = '\0';
+}
+
+/***********************************************************************
+ *           GdiGetCodePage   (GDI32.@)
+ */
+DWORD WINAPI GdiGetCodePage( HDC hdc )
+{
+    DC_ATTR *dc_attr = get_dc_attr( hdc );
+    return dc_attr ? dc_attr->font_code_page : CP_ACP;
+}
+
+/***********************************************************************
+ *           CreateFontIndirectExA   (GDI32.@)
+ */
+HFONT WINAPI CreateFontIndirectExA( const ENUMLOGFONTEXDVA *enumexA )
+{
+    ENUMLOGFONTEXDVW enumexW;
+
+    if (!enumexA) return 0;
+
+    logfontex_AtoW( &enumexA->elfEnumLogfontEx, &enumexW.elfEnumLogfontEx );
+    enumexW.elfDesignVector = enumexA->elfDesignVector;
+    return CreateFontIndirectExW( &enumexW );
+}
+
+/***********************************************************************
+ *           CreateFontIndirectExW   (GDI32.@)
+ */
+HFONT WINAPI CreateFontIndirectExW( const ENUMLOGFONTEXDVW *enumex )
+{
+    return NtGdiHfontCreate( enumex, sizeof(*enumex), 0, 0, NULL );
+}
+
+/***********************************************************************
+ *           CreateFontIndirectA   (GDI32.@)
+ */
+HFONT WINAPI CreateFontIndirectA( const LOGFONTA *lfA )
+{
+    LOGFONTW lfW;
+
+    if (!lfA) return 0;
+
+    logfont_AtoW( lfA, &lfW );
+    return CreateFontIndirectW( &lfW );
+}
+
+/***********************************************************************
+ *           CreateFontIndirectW   (GDI32.@)
+ */
+HFONT WINAPI CreateFontIndirectW( const LOGFONTW *lf )
+{
+    ENUMLOGFONTEXDVW exdv;
+
+    if (!lf) return 0;
+
+    exdv.elfEnumLogfontEx.elfLogFont = *lf;
+    exdv.elfEnumLogfontEx.elfFullName[0] = 0;
+    exdv.elfEnumLogfontEx.elfStyle[0] = 0;
+    exdv.elfEnumLogfontEx.elfScript[0] = 0;
+    return CreateFontIndirectExW( &exdv );
+}
+
+/*************************************************************************
+ *           CreateFontA    (GDI32.@)
+ */
+HFONT WINAPI CreateFontA( INT height, INT width, INT esc, INT orient, INT weight,
+                          DWORD italic, DWORD underline, DWORD strikeout,
+                          DWORD charset, DWORD outpres, DWORD clippres,
+                          DWORD quality, DWORD pitch, const char *name )
+{
+    LOGFONTA logfont;
+
+    logfont.lfHeight = height;
+    logfont.lfWidth = width;
+    logfont.lfEscapement = esc;
+    logfont.lfOrientation = orient;
+    logfont.lfWeight = weight;
+    logfont.lfItalic = italic;
+    logfont.lfUnderline = underline;
+    logfont.lfStrikeOut = strikeout;
+    logfont.lfCharSet = charset;
+    logfont.lfOutPrecision = outpres;
+    logfont.lfClipPrecision = clippres;
+    logfont.lfQuality = quality;
+    logfont.lfPitchAndFamily = pitch;
+
+    if (name)
+        lstrcpynA( logfont.lfFaceName, name, sizeof(logfont.lfFaceName) );
+    else
+        logfont.lfFaceName[0] = '\0';
+
+    return CreateFontIndirectA( &logfont );
+}
+
+/*************************************************************************
+ *           CreateFontW    (GDI32.@)
+ */
+HFONT WINAPI CreateFontW( INT height, INT width, INT esc, INT orient, INT weight,
+                          DWORD italic, DWORD underline, DWORD strikeout,
+                          DWORD charset, DWORD outpres, DWORD clippres,
+                          DWORD quality, DWORD pitch, const WCHAR *name )
+{
+    LOGFONTW logfont;
+
+    logfont.lfHeight = height;
+    logfont.lfWidth = width;
+    logfont.lfEscapement = esc;
+    logfont.lfOrientation = orient;
+    logfont.lfWeight = weight;
+    logfont.lfItalic = italic;
+    logfont.lfUnderline = underline;
+    logfont.lfStrikeOut = strikeout;
+    logfont.lfCharSet = charset;
+    logfont.lfOutPrecision = outpres;
+    logfont.lfClipPrecision = clippres;
+    logfont.lfQuality = quality;
+    logfont.lfPitchAndFamily = pitch;
+
+    if (name)
+        lstrcpynW( logfont.lfFaceName, name, ARRAY_SIZE(logfont.lfFaceName) );
+    else
+        logfont.lfFaceName[0] = '\0';
+
+    return CreateFontIndirectW( &logfont );
+}
+
+/***********************************************************************
  *           ExtTextOutW    (GDI32.@)
  */
 BOOL WINAPI ExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *rect,
@@ -709,6 +925,104 @@ BOOL WINAPI ExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *rect,
 
     HeapFree( GetProcessHeap(), 0, glyphs );
     return ret;
+}
+
+/***********************************************************************
+ *           ExtTextOutA    (GDI32.@)
+ */
+BOOL WINAPI ExtTextOutA( HDC hdc, INT x, INT y, UINT flags, const RECT *rect,
+                         const char *str, UINT count, const INT *dx )
+{
+    INT wlen;
+    UINT codepage;
+    WCHAR *p;
+    BOOL ret;
+    INT *dxW = NULL;
+
+    if (count > INT_MAX) return FALSE;
+
+    if (flags & ETO_GLYPH_INDEX)
+        return ExtTextOutW( hdc, x, y, flags, rect, (const WCHAR *)str, count, dx );
+
+    p = text_mbtowc( hdc, str, count, &wlen, &codepage );
+
+    if (dx)
+    {
+        unsigned int i = 0, j = 0;
+
+        /* allocate enough for a ETO_PDY */
+        dxW = HeapAlloc( GetProcessHeap(), 0, 2 * wlen * sizeof(INT) );
+        while (i < count)
+        {
+            if (IsDBCSLeadByteEx( codepage, str[i] ))
+            {
+                if (flags & ETO_PDY)
+                {
+                    dxW[j++] = dx[i * 2]     + dx[(i + 1) * 2];
+                    dxW[j++] = dx[i * 2 + 1] + dx[(i + 1) * 2 + 1];
+                }
+                else
+                    dxW[j++] = dx[i] + dx[i + 1];
+                i = i + 2;
+            }
+            else
+            {
+                if (flags & ETO_PDY)
+                {
+                    dxW[j++] = dx[i * 2];
+                    dxW[j++] = dx[i * 2 + 1];
+                }
+                else
+                    dxW[j++] = dx[i];
+                i = i + 1;
+            }
+        }
+    }
+
+    ret = ExtTextOutW( hdc, x, y, flags, rect, p, wlen, dxW );
+
+    HeapFree( GetProcessHeap(), 0, p );
+    HeapFree( GetProcessHeap(), 0, dxW );
+    return ret;
+}
+
+/***********************************************************************
+ *           TextOutA    (GDI32.@)
+ */
+BOOL WINAPI TextOutA( HDC hdc, INT x, INT y, const char *str, INT count )
+{
+    return ExtTextOutA( hdc, x, y, 0, NULL, str, count, NULL );
+}
+
+/***********************************************************************
+ *           TextOutW    (GDI32.@)
+ */
+BOOL WINAPI TextOutW( HDC hdc, INT x, INT y, const WCHAR *str, INT count )
+{
+    return ExtTextOutW( hdc, x, y, 0, NULL, str, count, NULL );
+}
+
+
+/***********************************************************************
+ *           PolyTextOutA    (GDI32.@)
+ */
+BOOL WINAPI PolyTextOutA( HDC hdc, const POLYTEXTA *pt, INT count )
+{
+    for (; count>0; count--, pt++)
+        if (!ExtTextOutA( hdc, pt->x, pt->y, pt->uiFlags, &pt->rcl, pt->lpstr, pt->n, pt->pdx ))
+            return FALSE;
+    return TRUE;
+}
+
+/***********************************************************************
+ *           PolyTextOutW    (GDI32.@)
+ */
+BOOL WINAPI PolyTextOutW( HDC hdc, const POLYTEXTW *pt, INT count )
+{
+    for (; count>0; count--, pt++)
+        if (!ExtTextOutW( hdc, pt->x, pt->y, pt->uiFlags, &pt->rcl, pt->lpstr, pt->n, pt->pdx ))
+            return FALSE;
+    return TRUE;
 }
 
 static int kern_pair( const KERNINGPAIR *kern, int count, WCHAR c1, WCHAR c2 )
@@ -880,4 +1194,379 @@ DWORD WINAPI GetCharacterPlacementW( HDC hdc, const WCHAR *str, INT count, INT m
 
     HeapFree( GetProcessHeap(), 0, kern );
     return ret;
+}
+
+/*************************************************************************
+ *           GetCharacterPlacementA    (GDI32.@)
+ */
+DWORD WINAPI GetCharacterPlacementA( HDC hdc, const char *str, INT count, INT max_extent,
+                                     GCP_RESULTSA *result, DWORD flags )
+{
+    GCP_RESULTSW resultsW;
+    WCHAR *strW;
+    INT countW;
+    DWORD ret;
+    UINT font_cp;
+
+    TRACE( "%s, %d, %d, 0x%08x\n", debugstr_an(str, count), count, max_extent, flags );
+
+    strW = text_mbtowc( hdc, str, count, &countW, &font_cp );
+
+    if (!result)
+    {
+        ret = GetCharacterPlacementW( hdc, strW, countW, max_extent, NULL, flags );
+        HeapFree( GetProcessHeap(), 0, strW );
+        return ret;
+    }
+
+    /* both structs are equal in size */
+    memcpy( &resultsW, result, sizeof(resultsW) );
+
+    if (result->lpOutString)
+        resultsW.lpOutString = HeapAlloc( GetProcessHeap(), 0, sizeof(WCHAR) * countW );
+
+    ret = GetCharacterPlacementW( hdc, strW, countW, max_extent, &resultsW, flags );
+
+    result->nGlyphs = resultsW.nGlyphs;
+    result->nMaxFit = resultsW.nMaxFit;
+
+    if (result->lpOutString)
+        WideCharToMultiByte( font_cp, 0, resultsW.lpOutString, countW,
+                             result->lpOutString, count, NULL, NULL );
+
+    HeapFree( GetProcessHeap(), 0, strW );
+    HeapFree( GetProcessHeap(), 0, resultsW.lpOutString );
+    return ret;
+}
+
+/***********************************************************************
+ *           GetTextFaceA    (GDI32.@)
+ */
+INT WINAPI GetTextFaceA( HDC hdc, INT count, char *name )
+{
+    INT res = GetTextFaceW( hdc, 0, NULL );
+    WCHAR *nameW = HeapAlloc( GetProcessHeap(), 0, res * sizeof(WCHAR) );
+
+    GetTextFaceW( hdc, res, nameW );
+    if (name)
+    {
+        if (count)
+        {
+            res = WideCharToMultiByte( CP_ACP, 0, nameW, -1, name, count, NULL, NULL );
+            if (res == 0) res = count;
+            name[count - 1] = 0;
+            /* GetTextFaceA does NOT include the nul byte in the return count.  */
+            res--;
+        }
+        else
+            res = 0;
+    }
+    else
+        res = WideCharToMultiByte( CP_ACP, 0, nameW, -1, NULL, 0, NULL, NULL );
+    HeapFree( GetProcessHeap(), 0, nameW );
+    return res;
+}
+
+/***********************************************************************
+ *           GetTextFaceW    (GDI32.@)
+ */
+INT WINAPI GetTextFaceW( HDC hdc, INT count, WCHAR *name )
+{
+    return NtGdiGetTextFaceW( hdc, count, name, FALSE );
+}
+
+/***********************************************************************
+ *           GetTextExtentExPointW    (GDI32.@)
+ */
+BOOL WINAPI GetTextExtentExPointW( HDC hdc, const WCHAR *str, INT count, INT max_ext,
+                                   INT *nfit, INT *dxs, SIZE *size )
+{
+    return NtGdiGetTextExtentExW( hdc, str, count, max_ext, nfit, dxs, size, 0 );
+}
+
+/***********************************************************************
+ *           GetTextExtentExPointI    (GDI32.@)
+ */
+BOOL WINAPI GetTextExtentExPointI( HDC hdc, const WORD *indices, INT count, INT max_ext,
+                                   INT *nfit, INT *dxs, SIZE *size )
+{
+    return NtGdiGetTextExtentExW( hdc, indices, count, max_ext, nfit, dxs, size, 1 );
+}
+
+/***********************************************************************
+ *           GetTextExtentExPointA    (GDI32.@)
+ */
+BOOL WINAPI GetTextExtentExPointA( HDC hdc, const char *str, INT count, INT max_ext,
+                                   INT *nfit, INT *dxs, SIZE *size )
+{
+    BOOL ret;
+    INT wlen;
+    INT *wdxs = NULL;
+    WCHAR *p = NULL;
+
+    if (count < 0 || max_ext < -1) return FALSE;
+
+    if (dxs)
+    {
+        wdxs = HeapAlloc( GetProcessHeap(), 0, count * sizeof(INT) );
+        if (!wdxs) return FALSE;
+    }
+
+    p = text_mbtowc( hdc, str, count, &wlen, NULL );
+    ret = GetTextExtentExPointW( hdc, p, wlen, max_ext, nfit, wdxs, size );
+    if (wdxs)
+    {
+        INT n = nfit ? *nfit : wlen;
+        INT i, j;
+        for (i = 0, j = 0; i < n; i++, j++)
+        {
+            dxs[j] = wdxs[i];
+            if (IsDBCSLeadByte( str[j] )) dxs[++j] = wdxs[i];
+        }
+    }
+    if (nfit) *nfit = WideCharToMultiByte( CP_ACP, 0, p, *nfit, NULL, 0, NULL, NULL );
+    HeapFree( GetProcessHeap(), 0, p );
+    HeapFree( GetProcessHeap(), 0, wdxs );
+    return ret;
+}
+
+/***********************************************************************
+ *           GetTextExtentPoint32W    (GDI32.@)
+ */
+BOOL WINAPI GetTextExtentPoint32W( HDC hdc, const WCHAR *str, INT count, SIZE *size )
+{
+    return GetTextExtentExPointW( hdc, str, count, 0, NULL, NULL, size );
+}
+
+/***********************************************************************
+ *           GetTextExtentPoint32A    (GDI32.@)
+ */
+BOOL WINAPI GetTextExtentPoint32A( HDC hdc, const char *str, INT count, SIZE *size )
+{
+    return GetTextExtentExPointA( hdc, str, count, 0, NULL, NULL, size );
+}
+
+/***********************************************************************
+ *           GetTextExtentPointI    (GDI32.@)
+ */
+BOOL WINAPI GetTextExtentPointI( HDC hdc, const WORD *indices, INT count, SIZE *size )
+{
+    return GetTextExtentExPointI( hdc, indices, count, 0, NULL, NULL, size );
+}
+
+/***********************************************************************
+ *           GetTextExtentPointA    (GDI32.@)
+ */
+BOOL WINAPI GetTextExtentPointA( HDC hdc, const char *str, INT count, SIZE *size )
+{
+    return GetTextExtentPoint32A( hdc, str, count, size );
+}
+
+/***********************************************************************
+ *           GetTextExtentPointW   (GDI32.@)
+ */
+BOOL WINAPI GetTextExtentPointW( HDC hdc, const WCHAR *str, INT count, SIZE *size )
+{
+    return GetTextExtentPoint32W( hdc, str, count, size );
+}
+
+/***********************************************************************
+ *           GetTextMetricsW    (GDI32.@)
+ */
+BOOL WINAPI GetTextMetricsW( HDC hdc, TEXTMETRICW *metrics )
+{
+    return NtGdiGetTextMetricsW( hdc, metrics, 0 );
+}
+
+/***********************************************************************
+ *           GetTextMetricsA    (GDI32.@)
+ */
+BOOL WINAPI GetTextMetricsA( HDC hdc, TEXTMETRICA *metrics )
+{
+    TEXTMETRICW tm32;
+
+    if (!GetTextMetricsW( hdc, &tm32 )) return FALSE;
+    text_metric_WtoA( &tm32, metrics );
+    return TRUE;
+}
+
+/***********************************************************************
+ *           GetOutlineTextMetricsA    (GDI32.@)
+ *
+ * Gets metrics for TrueType fonts.
+ *
+ * NOTES
+ *    If the supplied buffer isn't big enough Windows partially fills it up to
+ *    its given length and returns that length.
+ */
+UINT WINAPI GetOutlineTextMetricsA( HDC hdc, UINT size, OUTLINETEXTMETRICA *otm )
+{
+    char buf[512], *ptr;
+    UINT ret, needed;
+    OUTLINETEXTMETRICW *otmW = (OUTLINETEXTMETRICW *)buf;
+    OUTLINETEXTMETRICA *output = otm;
+    INT left, len;
+
+    if ((ret = GetOutlineTextMetricsW( hdc, 0, NULL )) == 0) return 0;
+    if (ret > sizeof(buf) && !(otmW = HeapAlloc( GetProcessHeap(), 0, ret )))
+        return 0;
+
+    GetOutlineTextMetricsW( hdc, ret, otmW );
+
+    needed = sizeof(OUTLINETEXTMETRICA);
+    if (otmW->otmpFamilyName)
+        needed += WideCharToMultiByte( CP_ACP, 0,
+                                       (WCHAR *)((char *)otmW + (ptrdiff_t)otmW->otmpFamilyName),
+                                       -1, NULL, 0, NULL, NULL );
+    if (otmW->otmpFaceName)
+        needed += WideCharToMultiByte( CP_ACP, 0,
+                                       (WCHAR *)((char *)otmW + (ptrdiff_t)otmW->otmpFaceName),
+                                       -1, NULL, 0, NULL, NULL );
+    if (otmW->otmpStyleName)
+        needed += WideCharToMultiByte( CP_ACP, 0,
+                                       (WCHAR *)((char *)otmW + (ptrdiff_t)otmW->otmpStyleName),
+                                       -1, NULL, 0, NULL, NULL );
+    if (otmW->otmpFullName)
+        needed += WideCharToMultiByte( CP_ACP, 0,
+                                       (WCHAR *)((char *)otmW + (ptrdiff_t)otmW->otmpFullName),
+                                       -1, NULL, 0, NULL, NULL );
+
+    if (!otm)
+    {
+        ret = needed;
+        goto end;
+    }
+
+    TRACE( "needed = %d\n", needed );
+    if (needed > size)
+        /* Since the supplied buffer isn't big enough, we'll alloc one
+           that is and memcpy the first size bytes into the otm at
+           the end. */
+        output = HeapAlloc( GetProcessHeap(), 0, needed );
+
+    ret = output->otmSize = min( needed, size );
+    text_metric_WtoA( &otmW->otmTextMetrics, &output->otmTextMetrics );
+    output->otmFiller = 0;
+    output->otmPanoseNumber = otmW->otmPanoseNumber;
+    output->otmfsSelection = otmW->otmfsSelection;
+    output->otmfsType = otmW->otmfsType;
+    output->otmsCharSlopeRise = otmW->otmsCharSlopeRise;
+    output->otmsCharSlopeRun = otmW->otmsCharSlopeRun;
+    output->otmItalicAngle = otmW->otmItalicAngle;
+    output->otmEMSquare = otmW->otmEMSquare;
+    output->otmAscent = otmW->otmAscent;
+    output->otmDescent = otmW->otmDescent;
+    output->otmLineGap = otmW->otmLineGap;
+    output->otmsCapEmHeight = otmW->otmsCapEmHeight;
+    output->otmsXHeight = otmW->otmsXHeight;
+    output->otmrcFontBox = otmW->otmrcFontBox;
+    output->otmMacAscent = otmW->otmMacAscent;
+    output->otmMacDescent = otmW->otmMacDescent;
+    output->otmMacLineGap = otmW->otmMacLineGap;
+    output->otmusMinimumPPEM = otmW->otmusMinimumPPEM;
+    output->otmptSubscriptSize = otmW->otmptSubscriptSize;
+    output->otmptSubscriptOffset = otmW->otmptSubscriptOffset;
+    output->otmptSuperscriptSize = otmW->otmptSuperscriptSize;
+    output->otmptSuperscriptOffset = otmW->otmptSuperscriptOffset;
+    output->otmsStrikeoutSize = otmW->otmsStrikeoutSize;
+    output->otmsStrikeoutPosition = otmW->otmsStrikeoutPosition;
+    output->otmsUnderscoreSize = otmW->otmsUnderscoreSize;
+    output->otmsUnderscorePosition = otmW->otmsUnderscorePosition;
+
+    ptr = (char *)(output + 1);
+    left = needed - sizeof(*output);
+
+    if (otmW->otmpFamilyName)
+    {
+        output->otmpFamilyName = (char *)(ptr - (char *)output);
+        len = WideCharToMultiByte( CP_ACP, 0,
+                                   (WCHAR *)((char *)otmW + (ptrdiff_t)otmW->otmpFamilyName),
+                                   -1, ptr, left, NULL, NULL );
+        left -= len;
+        ptr += len;
+    }
+    else output->otmpFamilyName = 0;
+
+    if (otmW->otmpFaceName)
+    {
+        output->otmpFaceName = (char *)(ptr - (char *)output);
+        len = WideCharToMultiByte( CP_ACP, 0,
+                                   (WCHAR *)((char *)otmW + (ptrdiff_t)otmW->otmpFaceName),
+                                   -1, ptr, left, NULL, NULL );
+        left -= len;
+        ptr += len;
+    }
+    else output->otmpFaceName = 0;
+
+    if (otmW->otmpStyleName)
+    {
+        output->otmpStyleName = (char *)(ptr - (char *)output);
+        len = WideCharToMultiByte( CP_ACP, 0,
+                                   (WCHAR *)((char *)otmW + (ptrdiff_t)otmW->otmpStyleName),
+                                   -1, ptr, left, NULL, NULL);
+        left -= len;
+        ptr += len;
+    }
+    else output->otmpStyleName = 0;
+
+    if (otmW->otmpFullName)
+    {
+        output->otmpFullName = (char *)(ptr - (char *)output);
+        len = WideCharToMultiByte( CP_ACP, 0,
+                                   (WCHAR *)((char *)otmW + (ptrdiff_t)otmW->otmpFullName),
+                                   -1, ptr, left, NULL, NULL );
+        left -= len;
+    }
+    else output->otmpFullName = 0;
+
+    assert( left == 0 );
+
+    if (output != otm)
+    {
+        memcpy( otm, output, size );
+        HeapFree( GetProcessHeap(), 0, output );
+
+        /* check if the string offsets really fit into the provided size */
+        /* FIXME: should we check string length as well? */
+        /* make sure that we don't read/write beyond the provided buffer */
+        if (otm->otmSize >= FIELD_OFFSET(OUTLINETEXTMETRICA, otmpFamilyName) + sizeof(char *))
+        {
+            if ((UINT_PTR)otm->otmpFamilyName >= otm->otmSize)
+                otm->otmpFamilyName = 0; /* doesn't fit */
+        }
+
+        /* make sure that we don't read/write beyond the provided buffer */
+        if (otm->otmSize >= FIELD_OFFSET(OUTLINETEXTMETRICA, otmpFaceName) + sizeof(char *))
+        {
+            if ((UINT_PTR)otm->otmpFaceName >= otm->otmSize)
+                otm->otmpFaceName = 0; /* doesn't fit */
+        }
+
+            /* make sure that we don't read/write beyond the provided buffer */
+        if (otm->otmSize >= FIELD_OFFSET(OUTLINETEXTMETRICA, otmpStyleName) + sizeof(char *))
+        {
+            if ((UINT_PTR)otm->otmpStyleName >= otm->otmSize)
+                otm->otmpStyleName = 0; /* doesn't fit */
+        }
+
+        /* make sure that we don't read/write beyond the provided buffer */
+        if (otm->otmSize >= FIELD_OFFSET(OUTLINETEXTMETRICA, otmpFullName) + sizeof(char *))
+        {
+            if ((UINT_PTR)otm->otmpFullName >= otm->otmSize)
+                otm->otmpFullName = 0; /* doesn't fit */
+        }
+    }
+
+end:
+    if (otmW != (OUTLINETEXTMETRICW *)buf)
+        HeapFree(GetProcessHeap(), 0, otmW);
+    return ret;
+}
+
+/***********************************************************************
+ *           GetOutlineTextMetricsW [GDI32.@]
+ */
+UINT WINAPI GetOutlineTextMetricsW( HDC hdc, UINT size, OUTLINETEXTMETRICW *otm )
+{
+    return NtGdiGetOutlineTextMetricsInternalW( hdc, size, otm, 0 );
 }

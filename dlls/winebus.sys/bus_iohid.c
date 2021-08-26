@@ -90,25 +90,32 @@
 #include "wine/debug.h"
 
 #include "bus.h"
+#include "unix_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(plugplay);
 #ifdef HAVE_IOHIDMANAGERCREATE
 
 static IOHIDManagerRef hid_manager;
 static CFRunLoopRef run_loop;
-static HANDLE run_loop_handle;
 
 static const WCHAR busidW[] = {'I','O','H','I','D',0};
+static struct iohid_bus_options options;
 
 struct platform_private
 {
+    struct unix_device unix_device;
     IOHIDDeviceRef device;
     uint8_t *buffer;
 };
 
+static inline struct platform_private *impl_from_unix_device(struct unix_device *iface)
+{
+    return CONTAINING_RECORD(iface, struct platform_private, unix_device);
+}
+
 static inline struct platform_private *impl_from_DEVICE_OBJECT(DEVICE_OBJECT *device)
 {
-    return (struct platform_private *)get_platform_private(device);
+    return impl_from_unix_device(get_unix_device(device));
 }
 
 static void CFStringToWSTR(CFStringRef cstr, LPWSTR wstr, int length)
@@ -136,6 +143,8 @@ static void handle_IOHIDDeviceIOHIDReportCallback(void *context,
 
 static void free_device(DEVICE_OBJECT *device)
 {
+    struct platform_private *private = impl_from_DEVICE_OBJECT(device);
+    HeapFree(GetProcessHeap(), 0, private);
 }
 
 static int compare_platform_device(DEVICE_OBJECT *device, void *platform_dev)
@@ -284,6 +293,7 @@ static const platform_vtbl iohid_vtbl =
 
 static void handle_DeviceMatchingCallback(void *context, IOReturn result, void *sender, IOHIDDeviceRef IOHIDDevice)
 {
+    struct platform_private *private;
     DEVICE_OBJECT *device;
     DWORD vid, pid, version, uid;
     CFStringRef str = NULL;
@@ -354,14 +364,14 @@ static void handle_DeviceMatchingCallback(void *context, IOReturn result, void *
     if (is_gamepad)
         input = 0;
 
-    device = bus_create_hid_device(busidW, vid, pid, input,
-            version, uid, str ? serial_string : NULL, is_gamepad,
-            &iohid_vtbl, sizeof(struct platform_private));
-    if (!device)
-        ERR("Failed to create device\n");
+    if (!(private = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(struct platform_private))))
+        return;
+
+    device = bus_create_hid_device(busidW, vid, pid, input, version, uid, str ? serial_string : NULL,
+                                   is_gamepad, &iohid_vtbl, &private->unix_device);
+    if (!device) HeapFree(GetProcessHeap(), 0, private);
     else
     {
-        struct platform_private *private = impl_from_DEVICE_OBJECT(device);
         private->device = IOHIDDevice;
         private->buffer = NULL;
         IoInvalidateDeviceRelations(bus_pdo, BusRelations);
@@ -385,63 +395,65 @@ static void handle_RemovalCallback(void *context, IOReturn result, void *sender,
     }
 }
 
-/* This puts the relevant run loop for event handling into a WINE thread */
-static DWORD CALLBACK runloop_thread(void *args)
+NTSTATUS iohid_bus_init(void *args)
 {
+    TRACE("args %p\n", args);
+
+    options = *(struct iohid_bus_options *)args;
+
+    if (!(hid_manager = IOHIDManagerCreate(kCFAllocatorDefault, 0L)))
+    {
+        ERR("IOHID manager creation failed\n");
+        return STATUS_UNSUCCESSFUL;
+    }
+
     run_loop = CFRunLoopGetCurrent();
 
     IOHIDManagerSetDeviceMatching(hid_manager, NULL);
     IOHIDManagerRegisterDeviceMatchingCallback(hid_manager, handle_DeviceMatchingCallback, NULL);
     IOHIDManagerRegisterDeviceRemovalCallback(hid_manager, handle_RemovalCallback, NULL);
     IOHIDManagerScheduleWithRunLoop(hid_manager, run_loop, kCFRunLoopDefaultMode);
-
-    CFRunLoopRun();
-    TRACE("Run Loop exiting\n");
-    return 1;
-
-}
-
-NTSTATUS iohid_driver_init(void)
-{
-    hid_manager = IOHIDManagerCreate(kCFAllocatorDefault, 0L);
-    if (!(run_loop_handle = CreateThread(NULL, 0, runloop_thread, NULL, 0, NULL)))
-    {
-        ERR("Failed to initialize IOHID Manager thread\n");
-        CFRelease(hid_manager);
-        return STATUS_UNSUCCESSFUL;
-    }
-
-    TRACE("Initialization successful\n");
     return STATUS_SUCCESS;
 }
 
-void iohid_driver_unload( void )
+NTSTATUS iohid_bus_wait(void *args)
 {
-    TRACE("Unloading Driver\n");
+    CFRunLoopRun();
 
-    if (!run_loop_handle)
-        return;
-
-    IOHIDManagerUnscheduleFromRunLoop(hid_manager, run_loop, kCFRunLoopDefaultMode);
-    CFRunLoopStop(run_loop);
-    WaitForSingleObject(run_loop_handle, INFINITE);
-    CloseHandle(run_loop_handle);
+    TRACE("IOHID main loop exiting\n");
     IOHIDManagerRegisterDeviceMatchingCallback(hid_manager, NULL, NULL);
     IOHIDManagerRegisterDeviceRemovalCallback(hid_manager, NULL, NULL);
     CFRelease(hid_manager);
-    TRACE("Driver Unloaded\n");
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS iohid_bus_stop(void *args)
+{
+    if (!run_loop) return STATUS_SUCCESS;
+
+    IOHIDManagerUnscheduleFromRunLoop(hid_manager, run_loop, kCFRunLoopDefaultMode);
+    CFRunLoopStop(run_loop);
+    return STATUS_SUCCESS;
 }
 
 #else
 
-NTSTATUS iohid_driver_init(void)
+NTSTATUS iohid_bus_init(void *args)
 {
+    WARN("IOHID support not compiled in!\n");
     return STATUS_NOT_IMPLEMENTED;
 }
 
-void iohid_driver_unload( void )
+NTSTATUS iohid_bus_wait(void *args)
 {
-    TRACE("Stub: Unload Driver\n");
+    WARN("IOHID support not compiled in!\n");
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS iohid_bus_stop(void *args)
+{
+    WARN("IOHID support not compiled in!\n");
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 #endif /* HAVE_IOHIDMANAGERCREATE */

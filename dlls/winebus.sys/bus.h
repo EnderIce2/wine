@@ -27,14 +27,6 @@
 
 typedef int(*enum_func)(DEVICE_OBJECT *device, void *context);
 
-/* Buses */
-NTSTATUS udev_driver_init(void) DECLSPEC_HIDDEN;
-NTSTATUS iohid_driver_init(void) DECLSPEC_HIDDEN;
-NTSTATUS sdl_driver_init(void) DECLSPEC_HIDDEN;
-void udev_driver_unload( void ) DECLSPEC_HIDDEN;
-void iohid_driver_unload( void ) DECLSPEC_HIDDEN;
-void sdl_driver_unload( void ) DECLSPEC_HIDDEN;
-
 /* Native device function table */
 typedef struct
 {
@@ -48,19 +40,18 @@ typedef struct
     void (*set_feature_report)(DEVICE_OBJECT *device, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io);
 } platform_vtbl;
 
-void *get_platform_private(DEVICE_OBJECT *device) DECLSPEC_HIDDEN;
+struct unix_device *get_unix_device(DEVICE_OBJECT *device) DECLSPEC_HIDDEN;
 
 /* HID Plug and Play Bus */
-DEVICE_OBJECT *bus_create_hid_device(const WCHAR *busidW, WORD vid, WORD pid,
-                                     WORD input, DWORD version, DWORD uid, const WCHAR *serialW, BOOL is_gamepad,
-                                     const platform_vtbl *vtbl, DWORD platform_data_size) DECLSPEC_HIDDEN;
+DEVICE_OBJECT *bus_create_hid_device(const WCHAR *busidW, WORD vid, WORD pid, WORD input,
+                                     DWORD version, DWORD uid, const WCHAR *serialW, BOOL is_gamepad,
+                                     const platform_vtbl *vtbl, struct unix_device *unix_device) DECLSPEC_HIDDEN;
 DEVICE_OBJECT *bus_find_hid_device(const WCHAR *bus_id, void *platform_dev) DECLSPEC_HIDDEN;
 void bus_unlink_hid_device(DEVICE_OBJECT *device) DECLSPEC_HIDDEN;
 void process_hid_report(DEVICE_OBJECT *device, BYTE *report, DWORD length) DECLSPEC_HIDDEN;
 DEVICE_OBJECT *bus_enumerate_hid_devices(const WCHAR *bus_id, enum_func function, void *context) DECLSPEC_HIDDEN;
 
 /* General Bus Functions */
-DWORD check_bus_option(const UNICODE_STRING *option, DWORD default_value) DECLSPEC_HIDDEN;
 BOOL is_xbox_gamepad(WORD vid, WORD pid) DECLSPEC_HIDDEN;
 
 extern HANDLE driver_key DECLSPEC_HIDDEN;

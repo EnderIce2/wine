@@ -22,6 +22,10 @@
 #include <stdarg.h>
 #include <stddef.h>
 
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+
 #ifdef HAVE_SYS_SYSCTL_H
 #include <sys/sysctl.h>
 #endif
@@ -32,6 +36,10 @@
 
 #ifdef HAVE_SYS_SOCKETVAR_H
 #include <sys/socketvar.h>
+#endif
+
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
 #endif
 
 #ifdef HAVE_NETINET_IP_H
