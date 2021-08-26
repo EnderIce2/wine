@@ -249,6 +249,7 @@ typedef enum _ETW_FUNCTION_CODE
     EtwFunctionGetTraceGuidList = 21,
     EtwFunctionGetTraceGuidInfo = 22,
     EtwFunctionEnumerateTraceGuids = 23,
+    EtwFunctionRegisterSecurityProvider = 24,
     EtwFunctionQueryReferenceTime = 25,
     EtwFunctionTrackProviderBinary = 26,
     EtwFunctionAddNotificationEvent = 27,
@@ -264,6 +265,7 @@ typedef enum _ETW_FUNCTION_CODE
     EtwFunctionRegisterPrivateSession = 39,
     EtwFunctionQuerySessionDemuxObject = 40,
     EtwFunctionSetProviderBinaryTracking = 41,
+    EtwFunctionGetMaxLoggers = 42,
 } ETW_FUNCTION_CODE;
 
 typedef struct _MM_COPY_ADDRESS {
