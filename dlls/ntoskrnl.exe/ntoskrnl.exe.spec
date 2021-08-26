@@ -820,7 +820,6 @@
 @ stdcall NtSetVolumeInformationFile(long ptr ptr long long)
 @ stdcall NtShutdownSystem(long)
 @ stdcall NtTraceControl(long ptr long ptr long long)
-@ stdcall -private ZwTraceControl(long ptr long ptr long long) NtTraceControl
 @ stub NtTraceEvent
 @ stdcall NtUnlockFile(long ptr ptr ptr ptr)
 @ stub NtVdmControl
