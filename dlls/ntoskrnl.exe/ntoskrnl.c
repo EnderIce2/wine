@@ -4599,15 +4599,16 @@ NTSTATUS WINAPI MmCopyMemory(PVOID TargetAddress, MM_COPY_ADDRESS SourceAddress,
 //     return STATUS_SUCCESS;
 // }
 
+// ZwTraceControl is no longer needed because is redirecting to NtTraceControl
 /***********************************************************************
  *              ZwTraceControl   (NTOSKRNL.EXE.@)
  */
-NTSTATUS NTAPI ZwTraceControl(ETW_FUNCTION_CODE FunctionCode, PVOID InBuffer, ULONG InBufferLen, PVOID OutBuffer, ULONG OutBufferLen, PULONG ReturnLength)
-{
-    *ReturnLength = InBufferLen;
-    FIXME("%d %p %d %p %u %p\n", FunctionCode, InBuffer, InBufferLen, OutBuffer, OutBufferLen, ReturnLength);
-    return STATUS_SUCCESS;
-}
+// NTSTATUS NTAPI ZwTraceControl(ETW_FUNCTION_CODE FunctionCode, PVOID InBuffer, ULONG InBufferLen, PVOID OutBuffer, ULONG OutBufferLen, PULONG ReturnLength)
+// {
+//     *ReturnLength = InBufferLen;
+//     FIXME("%d %p %d %p %u %p\n", FunctionCode, InBuffer, InBufferLen, OutBuffer, OutBufferLen, ReturnLength);
+//     return STATUS_SUCCESS;
+// }
 
 /*********************************************************************
  *           MmCopyVirtualMemory    (NTOSKRNL.@)
