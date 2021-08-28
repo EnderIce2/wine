@@ -582,8 +582,8 @@ PACKAGE_NAME='Țuică'
 PACKAGE_TARNAME='tuica'
 PACKAGE_VERSION='6.16'
 PACKAGE_STRING='Țuică 6.16'
-PACKAGE_BUGREPORT='wine-devel@winehq.org'
-PACKAGE_URL='https://www.winehq.org'
+PACKAGE_BUGREPORT='https://github.com/EnderIce2/wine/issues'
+PACKAGE_URL='https://github.com/EnderIce2/wine'
 
 ac_unique_file="server/atom.c"
 # Factoring default headers for most tests.
