@@ -578,10 +578,10 @@ MFLAGS=
 MAKEFLAGS=
 
 # Identity of this package.
-PACKAGE_NAME='Țuică'
-PACKAGE_TARNAME='tuica'
-PACKAGE_VERSION='6.15'
-PACKAGE_STRING='Țuică 6.15'
+PACKAGE_NAME='Wine'
+PACKAGE_TARNAME='wine'
+PACKAGE_VERSION='6.16'
+PACKAGE_STRING='Wine 6.16'
 PACKAGE_BUGREPORT='wine-devel@winehq.org'
 PACKAGE_URL='https://www.winehq.org'
 
