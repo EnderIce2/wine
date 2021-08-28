@@ -289,7 +289,7 @@
 # @ stub GetEnhMetaFilePixelFormat
 @ stdcall GetEnhMetaFileW(wstr)
 # @ stub GetFontAssocStatus
-@ stdcall GetFontData(long long long ptr long)
+@ stdcall GetFontData(long long long ptr long) NtGdiGetFontData
 @ stdcall GetFontFileData(long long int64 ptr long)
 @ stdcall GetFontFileInfo(long long ptr long ptr)
 @ stdcall GetFontLanguageInfo(long)
@@ -309,7 +309,7 @@
 @ stdcall GetICMProfileW(long ptr ptr)
 @ stdcall GetKerningPairs(long long ptr) GetKerningPairsA
 @ stdcall GetKerningPairsA(long long ptr)
-@ stdcall GetKerningPairsW(long long ptr)
+@ stdcall GetKerningPairsW(long long ptr) NtGdiGetKerningPairsW
 @ stdcall GetLayout(long)
 @ stdcall GetLogColorSpaceA(long ptr long)
 @ stdcall GetLogColorSpaceW(long ptr long)

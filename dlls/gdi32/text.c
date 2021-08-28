@@ -1049,7 +1049,7 @@ static int *kern_string( HDC hdc, const WCHAR *str, int len, int *kern_total )
     ret = HeapAlloc( GetProcessHeap(), 0, len * sizeof(*ret) );
     if (!ret) return NULL;
 
-    count = GetKerningPairsW( hdc, 0, NULL );
+    count = NtGdiGetKerningPairsW( hdc, 0, NULL );
     if (count)
     {
         kern = HeapAlloc( GetProcessHeap(), 0, count * sizeof(*kern) );
@@ -1059,7 +1059,7 @@ static int *kern_string( HDC hdc, const WCHAR *str, int len, int *kern_total )
             return NULL;
         }
 
-        GetKerningPairsW( hdc, count, kern );
+        NtGdiGetKerningPairsW( hdc, count, kern );
     }
 
     for (i = 0; i < len - 1; i++)
@@ -1569,4 +1569,331 @@ end:
 UINT WINAPI GetOutlineTextMetricsW( HDC hdc, UINT size, OUTLINETEXTMETRICW *otm )
 {
     return NtGdiGetOutlineTextMetricsInternalW( hdc, size, otm, 0 );
+}
+
+/***********************************************************************
+ *           GetCharWidthW      (GDI32.@)
+ *           GetCharWidth32W    (GDI32.@)
+ */
+BOOL WINAPI GetCharWidth32W( HDC hdc, UINT first, UINT last, INT *buffer )
+{
+    return NtGdiGetCharWidthW( hdc, first, last, NULL, NTGDI_GETCHARWIDTH_INT, buffer );
+}
+
+static WCHAR *get_chars_by_range( HDC hdc, UINT first, UINT last, INT *ret_len )
+{
+    INT i, count = last - first + 1;
+    WCHAR *wstr;
+    char *str;
+    UINT mbcp;
+    UINT c;
+
+    if (count <= 0)
+        return NULL;
+
+    mbcp = GdiGetCodePage( hdc );
+    switch (mbcp)
+    {
+    case 932:
+    case 936:
+    case 949:
+    case 950:
+    case 1361:
+        if (last > 0xffff)
+            return NULL;
+        if ((first ^ last) > 0xff)
+            return NULL;
+        break;
+    default:
+        if (last > 0xff)
+            return NULL;
+        mbcp = 0;
+        break;
+    }
+
+    if (!(str = HeapAlloc( GetProcessHeap(), 0, count * 2 + 1 )))
+        return NULL;
+
+    for (i = 0, c = first; c <= last; i++, c++)
+    {
+        if (mbcp) {
+            if (c > 0xff)
+                str[i++] = (BYTE)(c >> 8);
+            if (c <= 0xff && IsDBCSLeadByteEx( mbcp, c ))
+                str[i] = 0x1f; /* FIXME: use default character */
+            else
+                str[i] = (BYTE)c;
+        }
+        else
+            str[i] = (BYTE)c;
+    }
+    str[i] = '\0';
+
+    wstr = text_mbtowc( hdc, str, i, ret_len, NULL );
+    HeapFree( GetProcessHeap(), 0, str );
+    return wstr;
+}
+
+/***********************************************************************
+ *           GetCharWidthA      (GDI32.@)
+ *           GetCharWidth32A    (GDI32.@)
+ */
+BOOL WINAPI GetCharWidth32A( HDC hdc, UINT first, UINT last, INT *buffer )
+{
+    WCHAR *chars;
+    INT count;
+    BOOL ret;
+
+    if (!(chars = get_chars_by_range( hdc, first, last, &count ))) return FALSE;
+    ret = NtGdiGetCharWidthW( hdc, 0, count, chars, NTGDI_GETCHARWIDTH_INT, buffer );
+    HeapFree( GetProcessHeap(), 0, chars );
+    return ret;
+}
+
+/***********************************************************************
+ *           GetCharWidthFloatW    (GDI32.@)
+ */
+BOOL WINAPI GetCharWidthFloatW( HDC hdc, UINT first, UINT last, float *buffer )
+{
+    return NtGdiGetCharWidthW( hdc, first, last, NULL, 0, buffer );
+}
+
+/***********************************************************************
+ *           GetCharWidthFloatA    (GDI32.@)
+ */
+BOOL WINAPI GetCharWidthFloatA( HDC hdc, UINT first, UINT last, float *buffer )
+{
+    WCHAR *chars;
+    INT count;
+    BOOL ret;
+
+    if (!(chars = get_chars_by_range( hdc, first, last, &count ))) return FALSE;
+    ret = NtGdiGetCharWidthW( hdc, 0, count, chars, 0, buffer );
+    HeapFree( GetProcessHeap(), 0, chars );
+    return ret;
+}
+
+/***********************************************************************
+ *           GetCharWidthI    (GDI32.@)
+ */
+BOOL WINAPI GetCharWidthI( HDC hdc, UINT first, UINT count, WORD *glyphs, INT *buffer )
+{
+    TRACE( "(%p, %d, %d, %p, %p)\n", hdc, first, count, glyphs, buffer );
+    return NtGdiGetCharWidthW( hdc, first, count, glyphs,
+                               NTGDI_GETCHARWIDTH_INT | NTGDI_GETCHARWIDTH_INDICES, buffer );
+}
+
+/***********************************************************************
+ *           GetCharABCWidthsW    (GDI32.@)
+ */
+BOOL WINAPI GetCharABCWidthsW( HDC hdc, UINT first, UINT last, ABC *abc )
+{
+    return NtGdiGetCharABCWidthsW( hdc, first, last, NULL, NTGDI_GETCHARABCWIDTHS_INT, abc );
+}
+
+/***********************************************************************
+ *           GetCharABCWidthsA   (GDI32.@)
+ *
+ * See GetCharABCWidthsW.
+ */
+BOOL WINAPI GetCharABCWidthsA( HDC hdc, UINT first, UINT last, ABC *abc )
+{
+    WCHAR *chars;
+    INT count;
+    BOOL ret;
+
+    if (!(chars = get_chars_by_range( hdc, first, last, &count ))) return FALSE;
+    ret = NtGdiGetCharABCWidthsW( hdc, 0, count, chars, NTGDI_GETCHARABCWIDTHS_INT, abc );
+    HeapFree( GetProcessHeap(), 0, chars );
+    return ret;
+}
+
+/***********************************************************************
+ *      GetCharABCWidthsFloatW    (GDI32.@)
+ */
+BOOL WINAPI GetCharABCWidthsFloatW( HDC hdc, UINT first, UINT last, ABCFLOAT *abcf )
+{
+    TRACE( "%p, %d, %d, %p\n", hdc, first, last, abcf );
+    return NtGdiGetCharABCWidthsW( hdc, first, last, NULL, 0, abcf );
+}
+
+/***********************************************************************
+ *      GetCharABCWidthsFloatA    (GDI32.@)
+ */
+BOOL WINAPI GetCharABCWidthsFloatA( HDC hdc, UINT first, UINT last, ABCFLOAT *abcf )
+{
+    WCHAR *chars;
+    INT count;
+    BOOL ret;
+
+    if (!(chars = get_chars_by_range( hdc, first, last, &count ))) return FALSE;
+    ret = NtGdiGetCharABCWidthsW( hdc, 0, count, chars, 0, abcf );
+    HeapFree( GetProcessHeap(), 0, chars );
+    return ret;
+}
+
+/***********************************************************************
+ *           GetCharABCWidthsI    (GDI32.@)
+ */
+BOOL WINAPI GetCharABCWidthsI( HDC hdc, UINT first, UINT count, WORD *glyphs, ABC *buffer )
+{
+    TRACE( "(%p, %d, %d, %p, %p)\n", hdc, first, count, glyphs, buffer );
+    return NtGdiGetCharABCWidthsW( hdc, first, count, glyphs,
+                                   NTGDI_GETCHARABCWIDTHS_INDICES | NTGDI_GETCHARABCWIDTHS_INT,
+                                   buffer );
+}
+
+/***********************************************************************
+ *           GetGlyphOutlineA    (GDI32.@)
+ */
+DWORD WINAPI GetGlyphOutlineA( HDC hdc, UINT ch, UINT format, GLYPHMETRICS *metrics, DWORD size,
+                               void *buffer, const MAT2 *mat2 )
+{
+    if (!mat2) return GDI_ERROR;
+
+    if (!(format & GGO_GLYPH_INDEX))
+    {
+        UINT cp;
+        int len;
+        char mbchs[2];
+        WCHAR wChar;
+
+        cp = GdiGetCodePage( hdc );
+        if (IsDBCSLeadByteEx( cp, ch >> 8 ))
+        {
+            len = 2;
+            mbchs[0] = (ch & 0xff00) >> 8;
+            mbchs[1] = (ch & 0xff);
+        }
+        else
+        {
+            len = 1;
+            mbchs[0] = ch & 0xff;
+        }
+        wChar = 0;
+        MultiByteToWideChar(cp, 0, mbchs, len, &wChar, 1 );
+        ch = wChar;
+    }
+
+    return GetGlyphOutlineW( hdc, ch, format, metrics, size, buffer, mat2 );
+}
+
+/***********************************************************************
+ *           GetGlyphOutlineW    (GDI32.@)
+ */
+DWORD WINAPI GetGlyphOutlineW( HDC hdc, UINT ch, UINT format, GLYPHMETRICS *metrics,
+                               DWORD size, void *buffer, const MAT2 *mat2 )
+{
+    return NtGdiGetGlyphOutlineW( hdc, ch, format, metrics, size, buffer, mat2, FALSE );
+}
+
+/*************************************************************************
+ *             GetKerningPairsA   (GDI32.@)
+ */
+DWORD WINAPI GetKerningPairsA( HDC hdc, DWORD count, KERNINGPAIR *kern_pairA )
+{
+    DWORD i, total_kern_pairs, kern_pairs_copied = 0;
+    KERNINGPAIR *kern_pairW;
+    CPINFO cpi;
+    UINT cp;
+
+    if (!count && kern_pairA)
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return 0;
+    }
+
+    cp = GdiGetCodePage( hdc );
+
+    /* GetCPInfo() will fail on CP_SYMBOL, and WideCharToMultiByte is supposed
+     * to fail on an invalid character for CP_SYMBOL.
+     */
+    cpi.DefaultChar[0] = 0;
+    if (cp != CP_SYMBOL && !GetCPInfo( cp, &cpi ))
+    {
+        FIXME( "Can't find codepage %u info\n", cp );
+        return 0;
+    }
+
+    total_kern_pairs = NtGdiGetKerningPairsW( hdc, 0, NULL );
+    if (!total_kern_pairs) return 0;
+
+    kern_pairW = HeapAlloc( GetProcessHeap(), 0, total_kern_pairs * sizeof(*kern_pairW) );
+    NtGdiGetKerningPairsW( hdc, total_kern_pairs, kern_pairW );
+
+    for (i = 0; i < total_kern_pairs; i++)
+    {
+        char first, second;
+
+        if (!WideCharToMultiByte( cp, 0, &kern_pairW[i].wFirst, 1, &first, 1, NULL, NULL ))
+            continue;
+
+        if (!WideCharToMultiByte( cp, 0, &kern_pairW[i].wSecond, 1, &second, 1, NULL, NULL ))
+            continue;
+
+        if (first == cpi.DefaultChar[0] || second == cpi.DefaultChar[0])
+            continue;
+
+        if (kern_pairA)
+        {
+            if (kern_pairs_copied >= count) break;
+
+            kern_pairA->wFirst = (BYTE)first;
+            kern_pairA->wSecond = (BYTE)second;
+            kern_pairA->iKernAmount = kern_pairW[i].iKernAmount;
+            kern_pairA++;
+        }
+        kern_pairs_copied++;
+    }
+
+    HeapFree( GetProcessHeap(), 0, kern_pairW );
+    return kern_pairs_copied;
+}
+
+/*************************************************************************
+ *             GetFontLanguageInfo   (GDI32.@)
+ */
+DWORD WINAPI GetFontLanguageInfo( HDC hdc )
+{
+    FONTSIGNATURE fontsig;
+    DWORD result = 0;
+
+    static const DWORD GCP_DBCS_MASK = FS_JISJAPAN|FS_CHINESESIMP|FS_WANSUNG|FS_CHINESETRAD|FS_JOHAB,
+        GCP_DIACRITIC_MASK = 0x00000000,
+        FLI_GLYPHS_MASK = 0x00000000,
+        GCP_GLYPHSHAPE_MASK = FS_ARABIC,
+        GCP_KASHIDA_MASK = 0x00000000,
+        GCP_LIGATE_MASK = 0x00000000,
+        GCP_REORDER_MASK = FS_HEBREW|FS_ARABIC;
+
+
+    NtGdiGetTextCharsetInfo( hdc, &fontsig, 0 );
+    /* We detect each flag we return using a bitmask on the Codepage Bitfields */
+
+    if (fontsig.fsCsb[0] & GCP_DBCS_MASK)
+        result |= GCP_DBCS;
+
+    if (fontsig.fsCsb[0] & GCP_DIACRITIC_MASK)
+        result |= GCP_DIACRITIC;
+
+    if (fontsig.fsCsb[0] & FLI_GLYPHS_MASK)
+        result |= FLI_GLYPHS;
+
+    if (fontsig.fsCsb[0] & GCP_GLYPHSHAPE_MASK)
+        result |= GCP_GLYPHSHAPE;
+
+    if (fontsig.fsCsb[0] & GCP_KASHIDA_MASK)
+        result |= GCP_KASHIDA;
+
+    if (fontsig.fsCsb[0] & GCP_LIGATE_MASK)
+        result |= GCP_LIGATE;
+
+    if (NtGdiGetKerningPairsW( hdc, 0, NULL ))
+        result |= GCP_USEKERNING;
+
+    /* this might need a test for a HEBREW- or ARABIC_CHARSET as well */
+    if ((GetTextAlign( hdc ) & TA_RTLREADING) && (fontsig.fsCsb[0] & GCP_REORDER_MASK))
+        result |= GCP_REORDER;
+
+    return result;
 }

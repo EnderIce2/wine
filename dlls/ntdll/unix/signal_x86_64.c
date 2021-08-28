@@ -229,8 +229,8 @@ __ASM_GLOBAL_FUNC( alloc_fs_sel,
 #define FS_sig(context)      ((context)->uc_mcontext->__ss.__fs)
 #define GS_sig(context)      ((context)->uc_mcontext->__ss.__gs)
 #define EFL_sig(context)     ((context)->uc_mcontext->__ss.__rflags)
-#define RIP_sig(context)     (*((unsigned long*)&(context)->uc_mcontext->__ss.__rip))
-#define RSP_sig(context)     (*((unsigned long*)&(context)->uc_mcontext->__ss.__rsp))
+#define RIP_sig(context)     ((context)->uc_mcontext->__ss.__rip)
+#define RSP_sig(context)     ((context)->uc_mcontext->__ss.__rsp)
 #define TRAP_sig(context)    ((context)->uc_mcontext->__es.__trapno)
 #define ERROR_sig(context)   ((context)->uc_mcontext->__es.__err)
 #define FPU_sig(context)     ((XMM_SAVE_AREA32 *)&(context)->uc_mcontext->__fs.__fpu_fcw)
@@ -285,6 +285,8 @@ C_ASSERT( sizeof(struct stack_layout) == 0x590 ); /* Should match the size in ca
 #define SYSCALL_HAVE_PTHREAD_TEB 4
 #define SYSCALL_HAVE_WRFSGSBASE  8
 
+static unsigned int syscall_flags;
+
 /* stack layout when calling an user apc function.
  * FIXME: match Windows ABI. */
 struct apc_stack_layout
@@ -325,7 +327,9 @@ struct syscall_frame
     DWORD                 restore_flags; /* 0094 */
     ULONG64               rbp;           /* 0098 */
     struct syscall_frame *prev_frame;    /* 00a0 */
-    ULONG64               align[3];      /* 00a8 */
+    SYSTEM_SERVICE_TABLE *syscall_table; /* 00a8 */
+    DWORD                 syscall_flags; /* 00b0 */
+    DWORD                 align[3];      /* 00b4 */
     XMM_SAVE_AREA32       xsave;         /* 00c0 */
     DECLSPEC_ALIGN(64) XSTATE xstate;    /* 02c0 */
 };
@@ -2314,6 +2318,8 @@ NTSTATUS WINAPI KeUserModeCallback( ULONG id, const void *args, ULONG len, void 
         callback_frame.frame.eflags        = 0x200;
         callback_frame.frame.restore_flags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         callback_frame.frame.prev_frame    = frame;
+        callback_frame.frame.syscall_flags = frame->syscall_flags;
+        callback_frame.frame.syscall_table = frame->syscall_table;
         amd64_thread_data()->syscall_frame = &callback_frame.frame;
 
         __wine_syscall_dispatcher_return( &callback_frame.frame, 0 );
@@ -2935,8 +2941,8 @@ void signal_init_process(void)
     anon_mmap_fixed( ptr, page_size, PROT_READ | PROT_WRITE, 0 );
     *(void **)ptr = __wine_syscall_dispatcher;
 
-    if (cpu_info.ProcessorFeatureBits & CPU_FEATURE_XSAVE) __wine_syscall_flags |= SYSCALL_HAVE_XSAVE;
-    if (xstate_compaction_enabled) __wine_syscall_flags |= SYSCALL_HAVE_XSAVEC;
+    if (cpu_info.ProcessorFeatureBits & CPU_FEATURE_XSAVE) syscall_flags |= SYSCALL_HAVE_XSAVE;
+    if (xstate_compaction_enabled) syscall_flags |= SYSCALL_HAVE_XSAVEC;
 
 #ifdef __linux__
     if (NtCurrentTeb()->WowTebOffset)
@@ -2948,8 +2954,8 @@ void signal_init_process(void)
         if ((sel = alloc_fs_sel( -1, teb32 )) != -1)
         {
             fs32_sel = (sel << 3) | 3;
-            __wine_syscall_flags |= SYSCALL_HAVE_PTHREAD_TEB;
-            if (getauxval( AT_HWCAP2 ) & 2) __wine_syscall_flags |= SYSCALL_HAVE_WRFSGSBASE;
+            syscall_flags |= SYSCALL_HAVE_PTHREAD_TEB;
+            if (getauxval( AT_HWCAP2 ) & 2) syscall_flags |= SYSCALL_HAVE_WRFSGSBASE;
         }
         else ERR_(seh)( "failed to allocate %%fs selector\n" );
     }
@@ -3038,6 +3044,8 @@ void DECLSPEC_HIDDEN call_init_thunk( LPTHREAD_START_ROUTINE entry, void *arg, B
     frame->rcx = (ULONG64)ctx;
     frame->prev_frame = NULL;
     frame->restore_flags |= CONTEXT_INTEGER;
+    frame->syscall_flags = syscall_flags;
+    frame->syscall_table = KeServiceDescriptorTable;
 
     pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
     __wine_syscall_dispatcher_return( frame, 0 );
@@ -3097,5 +3105,147 @@ __ASM_GLOBAL_FUNC( signal_exit_thread,
                    __ASM_CFI(".cfi_rel_offset %r14,16\n\t")
                    __ASM_CFI(".cfi_rel_offset %r15,8\n\t")
                    "call *%rsi" )
+
+/***********************************************************************
+ *           __wine_syscall_dispatcher
+ */
+__ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
+                   "movq %gs:0x30,%rcx\n\t"
+                   "movq 0x328(%rcx),%rcx\n\t"     /* amd64_thread_data()->syscall_frame */
+                   "popq 0x70(%rcx)\n\t"           /* frame->rip */
+                   "pushfq\n\t"
+                   "popq 0x80(%rcx)\n\t"
+                   "movl $0,0x94(%rcx)\n\t"        /* frame->restore_flags */
+                   __ASM_NAME("__wine_syscall_dispatcher_prolog_end") ":\n\t"
+                   "movq %rax,0x00(%rcx)\n\t"
+                   "movq %rbx,0x08(%rcx)\n\t"
+                   "movq %rdx,0x18(%rcx)\n\t"
+                   "movq %rsi,0x20(%rcx)\n\t"
+                   "movq %rdi,0x28(%rcx)\n\t"
+                   "movq %r12,0x50(%rcx)\n\t"
+                   "movq %r13,0x58(%rcx)\n\t"
+                   "movq %r14,0x60(%rcx)\n\t"
+                   "movq %r15,0x68(%rcx)\n\t"
+                   "movw %cs,0x78(%rcx)\n\t"
+                   "movw %ds,0x7a(%rcx)\n\t"
+                   "movw %es,0x7c(%rcx)\n\t"
+                   "movw %fs,0x7e(%rcx)\n\t"
+                   "movq %rsp,0x88(%rcx)\n\t"
+                   "movw %ss,0x90(%rcx)\n\t"
+                   "movw %gs,0x92(%rcx)\n\t"
+                   "movq %rbp,0x98(%rcx)\n\t"
+                   /* Legends of Runeterra hooks the first system call return instruction, and
+                    * depends on us returning to it. Adjust the return address accordingly. */
+                   "subq $0xb,0x70(%rcx)\n\t"
+                   "movl 0xb0(%rcx),%r14d\n\t"     /* frame->syscall_flags */
+                   "testl $3,%r14d\n\t"            /* SYSCALL_HAVE_XSAVE | SYSCALL_HAVE_XSAVEC */
+                   "jz 2f\n\t"
+                   "movl $7,%eax\n\t"
+                   "xorl %edx,%edx\n\t"
+                   "movq %rdx,0x2c0(%rcx)\n\t"
+                   "movq %rdx,0x2c8(%rcx)\n\t"
+                   "movq %rdx,0x2d0(%rcx)\n\t"
+                   "testl $2,%r14d\n\t"            /* SYSCALL_HAVE_XSAVEC */
+                   "jz 1f\n\t"
+                   "movq %rdx,0x2d8(%rcx)\n\t"
+                   "movq %rdx,0x2e0(%rcx)\n\t"
+                   "movq %rdx,0x2e8(%rcx)\n\t"
+                   "movq %rdx,0x2f0(%rcx)\n\t"
+                   "movq %rdx,0x2f8(%rcx)\n\t"
+                   "xsavec64 0xc0(%rcx)\n\t"
+                   "jmp 3f\n"
+                   "1:\txsave64 0xc0(%rcx)\n\t"
+                   "jmp 3f\n"
+                   "2:\tfxsave64 0xc0(%rcx)\n"
+                   "3:\tleaq 0x98(%rcx),%rbp\n\t"
+#ifdef __linux__
+                   "testl $12,%r14d\n\t"           /* SYSCALL_HAVE_PTHREAD_TEB | SYSCALL_HAVE_WRFSGSBASE */
+                   "jz 2f\n\t"
+                   "movq %gs:0x330,%rsi\n\t"       /* amd64_thread_data()->pthread_teb */
+                   "testl $8,%r14d\n\t"            /* SYSCALL_HAVE_WRFSGSBASE */
+                   "jz 1f\n\t"
+                   "wrfsbase %rsi\n\t"
+                   "jmp 2f\n"
+                   "1:\tmov $0x1002,%edi\n\t"      /* ARCH_SET_FS */
+                   "mov $158,%eax\n\t"             /* SYS_arch_prctl */
+                   "syscall\n\t"
+                   "leaq -0x98(%rbp),%rcx\n"
+                   "2:\n\t"
+#endif
+                   "leaq 0x28(%rsp),%rsi\n\t"      /* first argument */
+                   "movq %rcx,%rsp\n\t"
+                   "movq 0x00(%rcx),%rax\n\t"
+                   "movq 0x18(%rcx),%rdx\n\t"
+                   "movl %eax,%ebx\n\t"
+                   "shrl $8,%ebx\n\t"
+                   "andl $0x30,%ebx\n\t"           /* syscall table number */
+                   "movq 0xa8(%rcx),%rcx\n\t"      /* frame->syscall_table */
+                   "leaq (%rcx,%rbx,2),%rbx\n\t"
+                   "andl $0xfff,%eax\n\t"          /* syscall number */
+                   "cmpq 16(%rbx),%rax\n\t"        /* table->ServiceLimit */
+                   "jae 5f\n\t"
+                   "movq 24(%rbx),%rcx\n\t"        /* table->ArgumentTable */
+                   "movzbl (%rcx,%rax),%ecx\n\t"
+                   "subq $0x20,%rcx\n\t"
+                   "jbe 1f\n\t"
+                   "subq %rcx,%rsp\n\t"
+                   "shrq $3,%rcx\n\t"
+                   "andq $~15,%rsp\n\t"
+                   "movq %rsp,%rdi\n\t"
+                   "cld\n\t"
+                   "rep; movsq\n"
+                   "1:\tmovq %r10,%rcx\n\t"
+                   "subq $0x20,%rsp\n\t"
+                   "movq (%rbx),%r10\n\t"          /* table->ServiceTable */
+                   "callq *(%r10,%rax,8)\n\t"
+                   "leaq -0x98(%rbp),%rcx\n"
+                   "2:\tmovl 0x94(%rcx),%edx\n\t"  /* frame->restore_flags */
+#ifdef __linux__
+                   "testl $12,%r14d\n\t"           /* SYSCALL_HAVE_PTHREAD_TEB | SYSCALL_HAVE_WRFSGSBASE */
+                   "jz 1f\n\t"
+                   "movw 0x7e(%rcx),%fs\n"
+                   "1:\n\t"
+#endif
+                   "testl $0x48,%edx\n\t"          /* CONTEXT_FLOATING_POINT | CONTEXT_XSTATE */
+                   "jz 4f\n\t"
+                   "testl $3,%r14d\n\t"            /* SYSCALL_HAVE_XSAVE | SYSCALL_HAVE_XSAVEC */
+                   "jz 3f\n\t"
+                   "movq %rax,%r11\n\t"
+                   "movl $7,%eax\n\t"
+                   "xorl %edx,%edx\n\t"
+                   "xrstor64 0xc0(%rcx)\n\t"
+                   "movq %r11,%rax\n\t"
+                   "movl 0x94(%rcx),%edx\n\t"
+                   "jmp 4f\n"
+                   "3:\tfxrstor64 0xc0(%rcx)\n"
+                   "4:\tmovq 0x98(%rcx),%rbp\n\t"
+                   "movq 0x68(%rcx),%r15\n\t"
+                   "movq 0x60(%rcx),%r14\n\t"
+                   "movq 0x58(%rcx),%r13\n\t"
+                   "movq 0x50(%rcx),%r12\n\t"
+                   "movq 0x28(%rcx),%rdi\n\t"
+                   "movq 0x20(%rcx),%rsi\n\t"
+                   "movq 0x08(%rcx),%rbx\n\t"
+                   "testl $0x3,%edx\n\t"           /* CONTEXT_CONTROL | CONTEXT_INTEGER */
+                   "jnz 1f\n\t"
+                   "movq 0x88(%rcx),%rsp\n\t"
+                   "jmpq *0x70(%rcx)\n"            /* frame->rip */
+                   "1:\tleaq 0x70(%rcx),%rsp\n\t"
+                   "testl $0x2,%edx\n\t"           /* CONTEXT_INTEGER */
+                   "jz 1f\n\t"
+                   "movq 0x00(%rcx),%rax\n\t"
+                   "movq 0x18(%rcx),%rdx\n\t"
+                   "movq 0x30(%rcx),%r8\n\t"
+                   "movq 0x38(%rcx),%r9\n\t"
+                   "movq 0x40(%rcx),%r10\n\t"
+                   "movq 0x48(%rcx),%r11\n\t"
+                   "movq 0x10(%rcx),%rcx\n"
+                   "1:\tiretq\n"
+                   "5:\tmovl $0xc000000d,%edx\n\t" /* STATUS_INVALID_PARAMETER */
+                   "movq %rsp,%rcx\n"
+                   __ASM_NAME("__wine_syscall_dispatcher_return") ":\n\t"
+                   "movl 0xb0(%rcx),%r14d\n\t"     /* frame->syscall_flags */
+                   "movq %rdx,%rax\n\t"
+                   "jmp 2b" )
 
 #endif  /* __x86_64__ */

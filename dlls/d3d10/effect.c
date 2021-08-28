@@ -1165,6 +1165,8 @@ static HRESULT parse_fx10_variable_head(const char *data, size_t data_size,
     }
     set_variable_vtbl(v);
 
+    v->explicit_bind_point = ~0u;
+
     return copy_variableinfo_from_type(v);
 }
 
@@ -1814,10 +1816,10 @@ static HRESULT parse_fx10_technique(const char *data, size_t data_size,
     return S_OK;
 }
 
-static HRESULT parse_fx10_variable(const char *data, size_t data_size,
+static HRESULT parse_fx10_numeric_variable(const char *data, size_t data_size,
         const char **ptr, struct d3d10_effect_variable *v)
 {
-    DWORD offset;
+    DWORD offset, default_value_offset;
     unsigned int i;
     HRESULT hr;
 
@@ -1837,10 +1839,13 @@ static HRESULT parse_fx10_variable(const char *data, size_t data_size,
     read_dword(ptr, &v->buffer_offset);
     TRACE("Variable offset in buffer: %#x.\n", v->buffer_offset);
 
-    skip_dword_unknown("variable", ptr, 1);
+    read_dword(ptr, &default_value_offset);
 
     read_dword(ptr, &v->flag);
     TRACE("Variable flag: %#x.\n", v->flag);
+
+    if (default_value_offset)
+        FIXME("Set default variable value.\n");
 
     read_dword(ptr, &v->annotation_count);
     TRACE("Variable has %u annotations.\n", v->annotation_count);
@@ -1924,7 +1929,8 @@ static HRESULT parse_fx10_local_variable(const char *data, size_t data_size,
     }
     TRACE("Variable semantic: %s.\n", debugstr_a(v->semantic));
 
-    skip_dword_unknown("local variable", ptr, 1);
+    read_dword(ptr, &v->explicit_bind_point);
+    TRACE("Variable explicit bind point %#x.\n", v->explicit_bind_point);
 
     switch (v->type->basetype)
     {
@@ -2188,7 +2194,8 @@ static HRESULT parse_fx10_local_buffer(const char *data, size_t data_size,
     read_dword(ptr, &l->type->member_count);
     TRACE("Local buffer member count: %#x.\n", l->type->member_count);
 
-    skip_dword_unknown("local buffer", ptr, 1);
+    read_dword(ptr, &l->explicit_bind_point);
+    TRACE("Local buffer explicit bind point: %#x.\n", l->explicit_bind_point);
 
     read_dword(ptr, &l->annotation_count);
     TRACE("Local buffer has %u annotations.\n", l->annotation_count);
@@ -2230,7 +2237,7 @@ static HRESULT parse_fx10_local_buffer(const char *data, size_t data_size,
         v->buffer = l;
         v->effect = l->effect;
 
-        if (FAILED(hr = parse_fx10_variable(data, data_size, ptr, v)))
+        if (FAILED(hr = parse_fx10_numeric_variable(data, data_size, ptr, v)))
             return hr;
 
         /*
@@ -2439,7 +2446,7 @@ static HRESULT parse_fx10_body(struct d3d10_effect *e, const char *data, DWORD d
 static HRESULT parse_fx10(struct d3d10_effect *e, const char *data, DWORD data_size)
 {
     const char *ptr = data;
-    DWORD unknown;
+    DWORD unused;
 
     if (!require_space(0, 19, sizeof(DWORD), data_size))
     {
@@ -2461,14 +2468,13 @@ static HRESULT parse_fx10(struct d3d10_effect *e, const char *data, DWORD data_s
     TRACE("Object count: %u\n", e->local_variable_count);
 
     read_dword(&ptr, &e->sharedbuffers_count);
-    TRACE("Sharedbuffers count: %u\n", e->sharedbuffers_count);
+    TRACE("Pool buffer count: %u\n", e->sharedbuffers_count);
 
-    /* Number of variables in shared buffers? */
-    read_dword(&ptr, &unknown);
-    FIXME("Unknown 0: %u\n", unknown);
+    read_dword(&ptr, &unused);
+    TRACE("Pool variable count: %u\n", unused);
 
     read_dword(&ptr, &e->sharedobjects_count);
-    TRACE("Sharedobjects count: %u\n", e->sharedobjects_count);
+    TRACE("Pool objects count: %u\n", e->sharedobjects_count);
 
     read_dword(&ptr, &e->technique_count);
     TRACE("Technique count: %u\n", e->technique_count);
@@ -2476,8 +2482,8 @@ static HRESULT parse_fx10(struct d3d10_effect *e, const char *data, DWORD data_s
     read_dword(&ptr, &e->index_offset);
     TRACE("Index offset: %#x\n", e->index_offset);
 
-    read_dword(&ptr, &unknown);
-    FIXME("Unknown 1: %u\n", unknown);
+    read_dword(&ptr, &unused);
+    TRACE("String count: %u\n", unused);
 
     read_dword(&ptr, &e->texture_count);
     TRACE("Texture count: %u\n", e->texture_count);

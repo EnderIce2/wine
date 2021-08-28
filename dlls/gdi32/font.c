@@ -3040,22 +3040,26 @@ static BOOL CDECL font_FontIsLinked( PHYSDEV dev )
 /*************************************************************
  * font_GetCharABCWidths
  */
-static BOOL CDECL font_GetCharABCWidths( PHYSDEV dev, UINT first, UINT last, ABC *buffer )
+static BOOL CDECL font_GetCharABCWidths( PHYSDEV dev, UINT first, UINT count,
+                                         WCHAR *chars, ABC *buffer )
 {
     struct font_physdev *physdev = get_font_dev( dev );
-    UINT c;
+    UINT c, i;
 
     if (!physdev->font)
     {
         dev = GET_NEXT_PHYSDEV( dev, pGetCharABCWidths );
-        return dev->funcs->pGetCharABCWidths( dev, first, last, buffer );
+        return dev->funcs->pGetCharABCWidths( dev, first, count, chars, buffer );
     }
 
-    TRACE( "%p, %u, %u, %p\n", physdev->font, first, last, buffer );
+    TRACE( "%p, %u, %u, %p\n", physdev->font, first, count, buffer );
 
     EnterCriticalSection( &font_cs );
-    for (c = first; c <= last; c++, buffer++)
-        get_glyph_outline( physdev->font, c, GGO_METRICS, NULL, buffer, 0, NULL, NULL );
+    for (i = 0; i < count; i++)
+    {
+        c = chars ? chars[i] : first + i;
+        get_glyph_outline( physdev->font, c, GGO_METRICS, NULL, &buffer[i], 0, NULL, NULL );
+    }
     LeaveCriticalSection( &font_cs );
     return TRUE;
 }
@@ -3089,27 +3093,29 @@ static BOOL CDECL font_GetCharABCWidthsI( PHYSDEV dev, UINT first, UINT count, W
 /*************************************************************
  * font_GetCharWidth
  */
-static BOOL CDECL font_GetCharWidth( PHYSDEV dev, UINT first, UINT last, INT *buffer )
+static BOOL CDECL font_GetCharWidth( PHYSDEV dev, UINT first, UINT count,
+                                     const WCHAR *chars, INT *buffer )
 {
     struct font_physdev *physdev = get_font_dev( dev );
+    UINT c, i;
     ABC abc;
-    UINT c;
 
     if (!physdev->font)
     {
         dev = GET_NEXT_PHYSDEV( dev, pGetCharWidth );
-        return dev->funcs->pGetCharWidth( dev, first, last, buffer );
+        return dev->funcs->pGetCharWidth( dev, first, count, chars, buffer );
     }
 
-    TRACE( "%p, %d, %d, %p\n", physdev->font, first, last, buffer );
+    TRACE( "%p, %d, %d, %p\n", physdev->font, first, count, buffer );
 
     EnterCriticalSection( &font_cs );
-    for (c = first; c <= last; c++)
+    for (i = 0; i < count; i++)
     {
+        c = chars ? chars[i] : i + first;
         if (get_glyph_outline( physdev->font, c, GGO_METRICS, NULL, &abc, 0, NULL, NULL ) == GDI_ERROR)
-            buffer[c - first] = 0;
+            buffer[i] = 0;
         else
-            buffer[c - first] = abc.abcA + abc.abcB + abc.abcC;
+            buffer[i] = abc.abcA + abc.abcB + abc.abcC;
     }
     LeaveCriticalSection( &font_cs );
     return TRUE;
@@ -4807,119 +4813,63 @@ UINT WINAPI NtGdiGetOutlineTextMetricsInternalW( HDC hdc, UINT cbData,
     return ret;
 }
 
-static LPSTR FONT_GetCharsByRangeA(HDC hdc, UINT firstChar, UINT lastChar, PINT pByteLen)
-{
-    INT i, count = lastChar - firstChar + 1;
-    UINT mbcp;
-    UINT c;
-    LPSTR str;
-
-    if (count <= 0)
-        return NULL;
-
-    mbcp = GdiGetCodePage(hdc);
-    switch (mbcp)
-    {
-    case 932:
-    case 936:
-    case 949:
-    case 950:
-    case 1361:
-        if (lastChar > 0xffff)
-            return NULL;
-        if ((firstChar ^ lastChar) > 0xff)
-            return NULL;
-        break;
-    default:
-        if (lastChar > 0xff)
-            return NULL;
-        mbcp = 0;
-        break;
-    }
-
-    str = HeapAlloc(GetProcessHeap(), 0, count * 2 + 1);
-    if (str == NULL)
-        return NULL;
-
-    for(i = 0, c = firstChar; c <= lastChar; i++, c++)
-    {
-        if (mbcp) {
-            if (c > 0xff)
-                str[i++] = (BYTE)(c >> 8);
-            if (c <= 0xff && IsDBCSLeadByteEx(mbcp, c))
-                str[i] = 0x1f; /* FIXME: use default character */
-            else
-                str[i] = (BYTE)c;
-        }
-        else
-            str[i] = (BYTE)c;
-    }
-    str[i] = '\0';
-
-    *pByteLen = i;
-
-    return str;
-}
-
 /***********************************************************************
- *           GetCharWidthW      (GDI32.@)
- *           GetCharWidth32W    (GDI32.@)
+ *           NtGdiGetCharWidthW    (win32u.@)
  */
-BOOL WINAPI GetCharWidth32W( HDC hdc, UINT firstChar, UINT lastChar,
-                               LPINT buffer )
+BOOL WINAPI NtGdiGetCharWidthW( HDC hdc, UINT first, UINT last, WCHAR *chars,
+                                ULONG flags, void *buf )
 {
-    UINT i;
+    UINT i, count = last;
     BOOL ret;
     PHYSDEV dev;
-    DC * dc = get_dc_ptr( hdc );
+    DC *dc;
 
-    if (!dc) return FALSE;
+    if (flags & NTGDI_GETCHARWIDTH_INDICES)
+    {
+        ABC *abc;
+        unsigned int i;
 
+        if (!(abc = HeapAlloc(GetProcessHeap(), 0, count * sizeof(ABC))))
+            return FALSE;
+
+        if (!NtGdiGetCharABCWidthsW( hdc, first, last, chars,
+                                     NTGDI_GETCHARABCWIDTHS_INT | NTGDI_GETCHARABCWIDTHS_INDICES,
+                                     abc ))
+        {
+            HeapFree( GetProcessHeap(), 0, abc );
+            return FALSE;
+        }
+
+        for (i = 0; i < count; i++)
+            ((INT *)buf)[i] = abc[i].abcA + abc[i].abcB + abc[i].abcC;
+
+        HeapFree(GetProcessHeap(), 0, abc);
+        return TRUE;
+    }
+
+    if (!(dc = get_dc_ptr( hdc ))) return FALSE;
+
+    if (!chars) count = last - first + 1;
     dev = GET_DC_PHYSDEV( dc, pGetCharWidth );
-    ret = dev->funcs->pGetCharWidth( dev, firstChar, lastChar, buffer );
+    ret = dev->funcs->pGetCharWidth( dev, first, count, chars, buf );
 
     if (ret)
     {
-        /* convert device units to logical */
-        for( i = firstChar; i <= lastChar; i++, buffer++ )
-            *buffer = width_to_LP( dc, *buffer );
+        if (flags & NTGDI_GETCHARWIDTH_INT)
+        {
+            INT *buffer = buf;
+            /* convert device units to logical */
+            for (i = 0; i < count; i++)
+                buffer[i] = width_to_LP( dc, buffer[i] );
+        }
+        else
+        {
+            float scale = fabs( dc->xformVport2World.eM11 ) / 16.0f;
+            for (i = 0; i < count; i++)
+                ((float *)buf)[i] = ((int *)buf)[i] * scale;
+        }
     }
     release_dc_ptr( dc );
-    return ret;
-}
-
-
-/***********************************************************************
- *           GetCharWidthA      (GDI32.@)
- *           GetCharWidth32A    (GDI32.@)
- */
-BOOL WINAPI GetCharWidth32A( HDC hdc, UINT firstChar, UINT lastChar,
-                               LPINT buffer )
-{
-    INT i, wlen;
-    LPSTR str;
-    LPWSTR wstr;
-    BOOL ret = TRUE;
-
-    str = FONT_GetCharsByRangeA(hdc, firstChar, lastChar, &i);
-    if(str == NULL)
-        return FALSE;
-
-    wstr = FONT_mbtowc(hdc, str, i, &wlen, NULL);
-
-    for(i = 0; i < wlen; i++)
-    {
-	if(!GetCharWidth32W(hdc, wstr[i], wstr[i], buffer))
-	{
-	    ret = FALSE;
-	    break;
-	}
-	buffer++;
-    }
-
-    HeapFree(GetProcessHeap(), 0, str);
-    HeapFree(GetProcessHeap(), 0, wstr);
-
     return ret;
 }
 
@@ -5608,49 +5558,8 @@ BOOL WINAPI GetAspectRatioFilterEx( HDC hdc, LPSIZE pAspectRatio )
 }
 
 
-/***********************************************************************
- *           GetCharABCWidthsA   (GDI32.@)
- *
- * See GetCharABCWidthsW.
- */
-BOOL WINAPI GetCharABCWidthsA(HDC hdc, UINT firstChar, UINT lastChar,
-                                  LPABC abc )
-{
-    INT i, wlen;
-    LPSTR str;
-    LPWSTR wstr;
-    BOOL ret = TRUE;
-
-    str = FONT_GetCharsByRangeA(hdc, firstChar, lastChar, &i);
-    if (str == NULL)
-        return FALSE;
-
-    wstr = FONT_mbtowc(hdc, str, i, &wlen, NULL);
-    if (wstr == NULL)
-    {
-        HeapFree(GetProcessHeap(), 0, str);
-        return FALSE;
-    }
-
-    for(i = 0; i < wlen; i++)
-    {
-	if(!GetCharABCWidthsW(hdc, wstr[i], wstr[i], abc))
-	{
-	    ret = FALSE;
-	    break;
-	}
-	abc++;
-    }
-
-    HeapFree(GetProcessHeap(), 0, str);
-    HeapFree(GetProcessHeap(), 0, wstr);
-
-    return ret;
-}
-
-
 /******************************************************************************
- * GetCharABCWidthsW [GDI32.@]
+ *           NtGdiGetCharABCWidthsW    (win32u.@)
  *
  * Retrieves widths of characters in range.
  *
@@ -5662,161 +5571,100 @@ BOOL WINAPI GetCharABCWidthsA(HDC hdc, UINT firstChar, UINT lastChar,
  *
  * NOTES
  *    Only works with TrueType fonts
- *
- * RETURNS
- *    Success: TRUE
- *    Failure: FALSE
  */
-BOOL WINAPI GetCharABCWidthsW( HDC hdc, UINT firstChar, UINT lastChar,
-                                   LPABC abc )
+BOOL WINAPI NtGdiGetCharABCWidthsW( HDC hdc, UINT first, UINT last, WCHAR *chars,
+                                    ULONG flags, void *buffer )
 {
     DC *dc = get_dc_ptr(hdc);
     PHYSDEV dev;
-    unsigned int i;
+    unsigned int i, count = last;
     BOOL ret;
     TEXTMETRICW tm;
 
     if (!dc) return FALSE;
 
-    if (!abc)
+    if (!buffer)
     {
         release_dc_ptr( dc );
         return FALSE;
     }
 
-    /* unlike GetCharABCWidthsFloatW, this one is supposed to fail on non-scalable fonts */
-    dev = GET_DC_PHYSDEV( dc, pGetTextMetrics );
-    if (!dev->funcs->pGetTextMetrics( dev, &tm ) || !(tm.tmPitchAndFamily & TMPF_VECTOR))
+    if (flags & NTGDI_GETCHARABCWIDTHS_INDICES)
     {
-        release_dc_ptr( dc );
-        return FALSE;
+        dev = GET_DC_PHYSDEV( dc, pGetCharABCWidthsI );
+        ret = dev->funcs->pGetCharABCWidthsI( dev, first, count, chars, buffer );
     }
-
-    dev = GET_DC_PHYSDEV( dc, pGetCharABCWidths );
-    ret = dev->funcs->pGetCharABCWidths( dev, firstChar, lastChar, abc );
-    if (ret)
+    else
     {
-        /* convert device units to logical */
-        for( i = firstChar; i <= lastChar; i++, abc++ ) {
-            abc->abcA = width_to_LP(dc, abc->abcA);
-            abc->abcB = width_to_LP(dc, abc->abcB);
-            abc->abcC = width_to_LP(dc, abc->abcC);
-	}
-    }
-
-    release_dc_ptr( dc );
-    return ret;
-}
-
-
-/******************************************************************************
- * GetCharABCWidthsI [GDI32.@]
- *
- * Retrieves widths of characters in range.
- *
- * PARAMS
- *    hdc       [I] Handle of device context
- *    firstChar [I] First glyphs in range to query
- *    count     [I] Last glyphs in range to query
- *    pgi       [i] Array of glyphs to query
- *    abc       [O] Address of character-width structure
- *
- * NOTES
- *    Only works with TrueType fonts
- *
- * RETURNS
- *    Success: TRUE
- *    Failure: FALSE
- */
-BOOL WINAPI GetCharABCWidthsI( HDC hdc, UINT firstChar, UINT count,
-                               LPWORD pgi, LPABC abc)
-{
-    DC *dc = get_dc_ptr(hdc);
-    PHYSDEV dev;
-    unsigned int i;
-    BOOL ret;
-
-    if (!dc) return FALSE;
-
-    if (!abc)
-    {
-        release_dc_ptr( dc );
-        return FALSE;
-    }
-
-    dev = GET_DC_PHYSDEV( dc, pGetCharABCWidthsI );
-    ret = dev->funcs->pGetCharABCWidthsI( dev, firstChar, count, pgi, abc );
-    if (ret)
-    {
-        /* convert device units to logical */
-        for( i = 0; i < count; i++, abc++ ) {
-            abc->abcA = width_to_LP(dc, abc->abcA);
-            abc->abcB = width_to_LP(dc, abc->abcB);
-            abc->abcC = width_to_LP(dc, abc->abcC);
-	}
-    }
-
-    release_dc_ptr( dc );
-    return ret;
-}
-
-
-/***********************************************************************
- *           GetGlyphOutlineA    (GDI32.@)
- */
-DWORD WINAPI GetGlyphOutlineA( HDC hdc, UINT uChar, UINT fuFormat,
-                                 LPGLYPHMETRICS lpgm, DWORD cbBuffer,
-                                 LPVOID lpBuffer, const MAT2 *lpmat2 )
-{
-    if (!lpmat2) return GDI_ERROR;
-
-    if(!(fuFormat & GGO_GLYPH_INDEX)) {
-        UINT cp;
-        int len;
-        char mbchs[2];
-        WCHAR wChar;
-
-        cp = GdiGetCodePage(hdc);
-        if (IsDBCSLeadByteEx(cp, uChar >> 8)) {
-            len = 2;
-            mbchs[0] = (uChar & 0xff00) >> 8;
-            mbchs[1] = (uChar & 0xff);
-        } else {
-            len = 1;
-            mbchs[0] = (uChar & 0xff);
+        if (flags & NTGDI_GETCHARABCWIDTHS_INT)
+        {
+            /* unlike float variant, this one is supposed to fail on non-scalable fonts */
+            dev = GET_DC_PHYSDEV( dc, pGetTextMetrics );
+            if (!dev->funcs->pGetTextMetrics( dev, &tm ) || !(tm.tmPitchAndFamily & TMPF_VECTOR))
+            {
+                release_dc_ptr( dc );
+                return FALSE;
+            }
         }
-        wChar = 0;
-        MultiByteToWideChar(cp, 0, mbchs, len, &wChar, 1);
-        uChar = wChar;
+
+        if (!chars) count = last - first + 1;
+        dev = GET_DC_PHYSDEV( dc, pGetCharABCWidths );
+        ret = dev->funcs->pGetCharABCWidths( dev, first, count, chars, buffer );
     }
 
-    return GetGlyphOutlineW(hdc, uChar, fuFormat, lpgm, cbBuffer, lpBuffer,
-                            lpmat2);
+    if (ret)
+    {
+        ABC *abc = buffer;
+        if (flags & NTGDI_GETCHARABCWIDTHS_INT)
+        {
+            /* convert device units to logical */
+            for (i = 0; i < count; i++)
+            {
+                abc[i].abcA = width_to_LP( dc, abc[i].abcA );
+                abc[i].abcB = width_to_LP( dc, abc[i].abcB );
+                abc[i].abcC = width_to_LP( dc, abc[i].abcC );
+            }
+        }
+        else
+        {
+            /* convert device units to logical */
+            FLOAT scale = fabs( dc->xformVport2World.eM11 );
+            ABCFLOAT *abcf = buffer;
+
+            for (i = 0; i < count; i++)
+            {
+                abcf[i].abcfA = abc[i].abcA * scale;
+                abcf[i].abcfB = abc[i].abcB * scale;
+                abcf[i].abcfC = abc[i].abcC * scale;
+            }
+        }
+    }
+
+    release_dc_ptr( dc );
+    return ret;
 }
 
+
 /***********************************************************************
- *           GetGlyphOutlineW    (GDI32.@)
+ *           NtGdiGetGlyphOutlineW    (win32u.@)
  */
-DWORD WINAPI GetGlyphOutlineW( HDC hdc, UINT uChar, UINT fuFormat,
-                                 LPGLYPHMETRICS lpgm, DWORD cbBuffer,
-                                 LPVOID lpBuffer, const MAT2 *lpmat2 )
+DWORD WINAPI NtGdiGetGlyphOutlineW( HDC hdc, UINT ch, UINT format, GLYPHMETRICS *metrics,
+                                    DWORD size, void *buffer, const MAT2 *mat2,
+                                    BOOL ignore_rotation )
 {
     DC *dc;
     DWORD ret;
     PHYSDEV dev;
 
-    TRACE("(%p, %04x, %04x, %p, %d, %p, %p)\n",
-	  hdc, uChar, fuFormat, lpgm, cbBuffer, lpBuffer, lpmat2 );
+    TRACE( "(%p, %04x, %04x, %p, %d, %p, %p)\n", hdc, ch, format, metrics, size, buffer, mat2 );
 
-    if (!lpmat2) return GDI_ERROR;
+    if (!mat2) return GDI_ERROR;
 
     dc = get_dc_ptr(hdc);
     if(!dc) return GDI_ERROR;
 
-    uChar &= 0xffff;
-
     dev = GET_DC_PHYSDEV( dc, pGetGlyphOutline );
-    ret = dev->funcs->pGetGlyphOutline( dev, uChar, fuFormat, lpgm, cbBuffer, lpBuffer, lpmat2 );
+    ret = dev->funcs->pGetGlyphOutline( dev, ch & 0xffff, format, metrics, size, buffer, mat2 );
     release_dc_ptr( dc );
     return ret;
 }
@@ -6128,93 +5976,27 @@ done:
 }
 
 /*************************************************************************
- *             GetKerningPairsA   (GDI32.@)
+ *             NtGdiGetKerningPairsW   (win32u.@)
  */
-DWORD WINAPI GetKerningPairsA( HDC hDC, DWORD cPairs,
-                               LPKERNINGPAIR kern_pairA )
-{
-    UINT cp;
-    CPINFO cpi;
-    DWORD i, total_kern_pairs, kern_pairs_copied = 0;
-    KERNINGPAIR *kern_pairW;
-
-    if (!cPairs && kern_pairA)
-    {
-        SetLastError(ERROR_INVALID_PARAMETER);
-        return 0;
-    }
-
-    cp = GdiGetCodePage(hDC);
-
-    /* GetCPInfo() will fail on CP_SYMBOL, and WideCharToMultiByte is supposed
-     * to fail on an invalid character for CP_SYMBOL.
-     */
-    cpi.DefaultChar[0] = 0;
-    if (cp != CP_SYMBOL && !GetCPInfo(cp, &cpi))
-    {
-        FIXME("Can't find codepage %u info\n", cp);
-        return 0;
-    }
-
-    total_kern_pairs = GetKerningPairsW(hDC, 0, NULL);
-    if (!total_kern_pairs) return 0;
-
-    kern_pairW = HeapAlloc(GetProcessHeap(), 0, total_kern_pairs * sizeof(*kern_pairW));
-    GetKerningPairsW(hDC, total_kern_pairs, kern_pairW);
-
-    for (i = 0; i < total_kern_pairs; i++)
-    {
-        char first, second;
-
-        if (!WideCharToMultiByte(cp, 0, &kern_pairW[i].wFirst, 1, &first, 1, NULL, NULL))
-            continue;
-
-        if (!WideCharToMultiByte(cp, 0, &kern_pairW[i].wSecond, 1, &second, 1, NULL, NULL))
-            continue;
-
-        if (first == cpi.DefaultChar[0] || second == cpi.DefaultChar[0])
-            continue;
-
-        if (kern_pairA)
-        {
-            if (kern_pairs_copied >= cPairs) break;
-
-            kern_pairA->wFirst = (BYTE)first;
-            kern_pairA->wSecond = (BYTE)second;
-            kern_pairA->iKernAmount = kern_pairW[i].iKernAmount;
-            kern_pairA++;
-        }
-        kern_pairs_copied++;
-    }
-
-    HeapFree(GetProcessHeap(), 0, kern_pairW);
-
-    return kern_pairs_copied;
-}
-
-/*************************************************************************
- *             GetKerningPairsW   (GDI32.@)
- */
-DWORD WINAPI GetKerningPairsW( HDC hDC, DWORD cPairs,
-                                 LPKERNINGPAIR lpKerningPairs )
+DWORD WINAPI NtGdiGetKerningPairsW( HDC hdc, DWORD count, KERNINGPAIR *kern_pair )
 {
     DC *dc;
     DWORD ret;
     PHYSDEV dev;
 
-    TRACE("(%p,%d,%p)\n", hDC, cPairs, lpKerningPairs);
+    TRACE( "(%p,%d,%p)\n", hdc, count, kern_pair );
 
-    if (!cPairs && lpKerningPairs)
+    if (!count && kern_pair)
     {
-        SetLastError(ERROR_INVALID_PARAMETER);
+        SetLastError( ERROR_INVALID_PARAMETER );
         return 0;
     }
 
-    dc = get_dc_ptr(hDC);
+    dc = get_dc_ptr( hdc );
     if (!dc) return 0;
 
     dev = GET_DC_PHYSDEV( dc, pGetKerningPairs );
-    ret = dev->funcs->pGetKerningPairs( dev, cPairs, lpKerningPairs );
+    ret = dev->funcs->pGetKerningPairs( dev, count, kern_pair );
     release_dc_ptr( dc );
     return ret;
 }
@@ -6263,56 +6045,7 @@ BOOL WINAPI TranslateCharsetInfo(
 }
 
 /*************************************************************************
- *             GetFontLanguageInfo   (GDI32.@)
- */
-DWORD WINAPI GetFontLanguageInfo(HDC hdc)
-{
-	FONTSIGNATURE fontsig;
-	static const DWORD GCP_DBCS_MASK=FS_JISJAPAN|FS_CHINESESIMP|FS_WANSUNG|FS_CHINESETRAD|FS_JOHAB,
-		GCP_DIACRITIC_MASK=0x00000000,
-		FLI_GLYPHS_MASK=0x00000000,
-		GCP_GLYPHSHAPE_MASK=FS_ARABIC,
-		GCP_KASHIDA_MASK=0x00000000,
-		GCP_LIGATE_MASK=0x00000000,
-		GCP_REORDER_MASK=FS_HEBREW|FS_ARABIC;
-
-	DWORD result=0;
-
-	NtGdiGetTextCharsetInfo( hdc, &fontsig, 0 );
-	/* We detect each flag we return using a bitmask on the Codepage Bitfields */
-
-	if( (fontsig.fsCsb[0]&GCP_DBCS_MASK)!=0 )
-		result|=GCP_DBCS;
-
-	if( (fontsig.fsCsb[0]&GCP_DIACRITIC_MASK)!=0 )
-		result|=GCP_DIACRITIC;
-
-	if( (fontsig.fsCsb[0]&FLI_GLYPHS_MASK)!=0 )
-		result|=FLI_GLYPHS;
-
-	if( (fontsig.fsCsb[0]&GCP_GLYPHSHAPE_MASK)!=0 )
-		result|=GCP_GLYPHSHAPE;
-
-	if( (fontsig.fsCsb[0]&GCP_KASHIDA_MASK)!=0 )
-		result|=GCP_KASHIDA;
-
-	if( (fontsig.fsCsb[0]&GCP_LIGATE_MASK)!=0 )
-		result|=GCP_LIGATE;
-
-	if( GetKerningPairsW( hdc, 0, NULL ) )
-		result|=GCP_USEKERNING;
-
-        /* this might need a test for a HEBREW- or ARABIC_CHARSET as well */
-        if( GetTextAlign( hdc) & TA_RTLREADING )
-            if( (fontsig.fsCsb[0]&GCP_REORDER_MASK)!=0 )
-                    result|=GCP_REORDER;
-
-	return result;
-}
-
-
-/*************************************************************************
- * GetFontData [GDI32.@]
+ *           NtGdiGetFontData    (win32u.@)
  *
  * Retrieve data for TrueType font.
  *
@@ -6326,8 +6059,7 @@ DWORD WINAPI GetFontLanguageInfo(HDC hdc)
  * Calls SetLastError()
  *
  */
-DWORD WINAPI GetFontData(HDC hdc, DWORD table, DWORD offset,
-    LPVOID buffer, DWORD length)
+DWORD WINAPI NtGdiGetFontData( HDC hdc, DWORD table, DWORD offset, void *buffer, DWORD length )
 {
     DC *dc = get_dc_ptr(hdc);
     PHYSDEV dev;
@@ -6379,149 +6111,6 @@ DWORD WINAPI GetGlyphIndicesW(HDC hdc, LPCWSTR lpstr, INT count,
     dev = GET_DC_PHYSDEV( dc, pGetGlyphIndices );
     ret = dev->funcs->pGetGlyphIndices( dev, lpstr, count, pgi, flags );
     release_dc_ptr( dc );
-    return ret;
-}
-
-/*************************************************************************
- *      GetCharABCWidthsFloatA [GDI32.@]
- *
- * See GetCharABCWidthsFloatW.
- */
-BOOL WINAPI GetCharABCWidthsFloatA( HDC hdc, UINT first, UINT last, LPABCFLOAT abcf )
-{
-    INT i, wlen;
-    LPSTR str;
-    LPWSTR wstr;
-    BOOL ret = TRUE;
-
-    str = FONT_GetCharsByRangeA(hdc, first, last, &i);
-    if (str == NULL)
-        return FALSE;
-
-    wstr = FONT_mbtowc( hdc, str, i, &wlen, NULL );
-
-    for (i = 0; i < wlen; i++)
-    {
-        if (!GetCharABCWidthsFloatW( hdc, wstr[i], wstr[i], abcf ))
-        {
-            ret = FALSE;
-            break;
-        }
-        abcf++;
-    }
-
-    HeapFree( GetProcessHeap(), 0, str );
-    HeapFree( GetProcessHeap(), 0, wstr );
-
-    return ret;
-}
-
-/*************************************************************************
- *      GetCharABCWidthsFloatW [GDI32.@]
- *
- * Retrieves widths of a range of characters.
- *
- * PARAMS
- *    hdc   [I] Handle to device context.
- *    first [I] First character in range to query.
- *    last  [I] Last character in range to query.
- *    abcf  [O] Array of LPABCFLOAT structures.
- *
- * RETURNS
- *    Success: TRUE
- *    Failure: FALSE
- */
-BOOL WINAPI GetCharABCWidthsFloatW( HDC hdc, UINT first, UINT last, LPABCFLOAT abcf )
-{
-    UINT i;
-    ABC *abc;
-    PHYSDEV dev;
-    BOOL ret = FALSE;
-    DC *dc = get_dc_ptr( hdc );
-
-    TRACE("%p, %d, %d, %p\n", hdc, first, last, abcf);
-
-    if (!dc) return FALSE;
-
-    if (!abcf) goto done;
-    if (!(abc = HeapAlloc( GetProcessHeap(), 0, (last - first + 1) * sizeof(*abc) ))) goto done;
-
-    dev = GET_DC_PHYSDEV( dc, pGetCharABCWidths );
-    ret = dev->funcs->pGetCharABCWidths( dev, first, last, abc );
-    if (ret)
-    {
-        /* convert device units to logical */
-        FLOAT scale = fabs( dc->xformVport2World.eM11 );
-        for (i = first; i <= last; i++, abcf++)
-        {
-            abcf->abcfA = abc[i - first].abcA * scale;
-            abcf->abcfB = abc[i - first].abcB * scale;
-            abcf->abcfC = abc[i - first].abcC * scale;
-        }
-    }
-    HeapFree( GetProcessHeap(), 0, abc );
-
-done:
-    release_dc_ptr( dc );
-    return ret;
-}
-
-/*************************************************************************
- *      GetCharWidthFloatA [GDI32.@]
- */
-BOOL WINAPI GetCharWidthFloatA( HDC hdc, UINT first, UINT last, float *buffer )
-{
-    WCHAR *wstr;
-    int i, wlen;
-    char *str;
-
-    if (!(str = FONT_GetCharsByRangeA( hdc, first, last, &i )))
-        return FALSE;
-    wstr = FONT_mbtowc( hdc, str, i, &wlen, NULL );
-    heap_free(str);
-
-    for (i = 0; i < wlen; ++i)
-    {
-        if (!GetCharWidthFloatW( hdc, wstr[i], wstr[i], &buffer[i] ))
-        {
-            heap_free(wstr);
-            return FALSE;
-        }
-    }
-    heap_free(wstr);
-    return TRUE;
-}
-
-/*************************************************************************
- *      GetCharWidthFloatW [GDI32.@]
- */
-BOOL WINAPI GetCharWidthFloatW( HDC hdc, UINT first, UINT last, float *buffer )
-{
-    DC *dc = get_dc_ptr( hdc );
-    int *ibuffer;
-    PHYSDEV dev;
-    BOOL ret;
-    UINT i;
-
-    TRACE("dc %p, first %#x, last %#x, buffer %p\n", dc, first, last, buffer);
-
-    if (!dc) return FALSE;
-
-    if (!(ibuffer = heap_alloc( (last - first + 1) * sizeof(int) )))
-    {
-        release_dc_ptr( dc );
-        return FALSE;
-    }
-
-    dev = GET_DC_PHYSDEV( dc, pGetCharWidth );
-    if ((ret = dev->funcs->pGetCharWidth( dev, first, last, ibuffer )))
-    {
-        float scale = fabs( dc->xformVport2World.eM11 ) / 16.0f;
-        for (i = first; i <= last; ++i)
-            buffer[i - first] = ibuffer[i - first] * scale;
-    }
-
-    heap_free(ibuffer);
     return ret;
 }
 
@@ -7194,48 +6783,6 @@ BOOL WINAPI EnableEUDC(BOOL fEnableEUDC)
 {
     FIXME("(%d): stub\n", fEnableEUDC);
     return FALSE;
-}
-
-/***********************************************************************
- *           GetCharWidthI    (GDI32.@)
- *
- * Retrieve widths of characters.
- *
- * PARAMS
- *  hdc    [I] Handle to a device context.
- *  first  [I] First glyph in range to query.
- *  count  [I] Number of glyph indices to query.
- *  glyphs [I] Array of glyphs to query.
- *  buffer [O] Buffer to receive character widths.
- *
- * NOTES
- *  Only works with TrueType fonts.
- *
- * RETURNS
- *  Success: TRUE
- *  Failure: FALSE
- */
-BOOL WINAPI GetCharWidthI(HDC hdc, UINT first, UINT count, LPWORD glyphs, LPINT buffer)
-{
-    ABC *abc;
-    unsigned int i;
-
-    TRACE("(%p, %d, %d, %p, %p)\n", hdc, first, count, glyphs, buffer);
-
-    if (!(abc = HeapAlloc(GetProcessHeap(), 0, count * sizeof(ABC))))
-        return FALSE;
-
-    if (!GetCharABCWidthsI(hdc, first, count, glyphs, abc))
-    {
-        HeapFree(GetProcessHeap(), 0, abc);
-        return FALSE;
-    }
-
-    for (i = 0; i < count; i++)
-        buffer[i] = abc[i].abcA + abc[i].abcB + abc[i].abcC;
-
-    HeapFree(GetProcessHeap(), 0, abc);
-    return TRUE;
 }
 
 /***********************************************************************

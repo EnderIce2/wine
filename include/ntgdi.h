@@ -123,6 +123,12 @@ enum
     NtGdiSetDIBColorTable,
 };
 
+#define NTGDI_GETCHARWIDTH_INT      0x02
+#define NTGDI_GETCHARWIDTH_INDICES  0x08
+
+#define NTGDI_GETCHARABCWIDTHS_INT      0x01
+#define NTGDI_GETCHARABCWIDTHS_INDICES  0x02
+
 #define MWT_SET  4
 
 /* structs not compatible with native Windows */
@@ -131,7 +137,7 @@ enum
 typedef struct DC_ATTR
 {
     HDC       hdc;                 /* handle to self */
-    LONG      disabled;            /* disabled flag, controled by DCHF_(DISABLE|ENABLE)DC */
+    LONG      disabled;            /* disabled flag, controlled by DCHF_(DISABLE|ENABLE)DC */
     int       save_level;
     COLORREF  background_color;
     COLORREF  brush_color;
@@ -219,6 +225,8 @@ BOOL     WINAPI NtGdiFillRgn( HDC hdc, HRGN hrgn, HBRUSH hbrush );
 INT      WINAPI NtGdiExtEscape( HDC hdc, WCHAR *driver, INT driver_id, INT escape, INT input_size,
                                 const char *input, INT output_size, char *output );
 BOOL     WINAPI NtGdiExtFloodFill( HDC hdc, INT x, INT y, COLORREF color, UINT type );
+BOOL     WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *rect,
+                                  const WCHAR *str, UINT count, const INT *dx, DWORD cp );
 BOOL     WINAPI NtGdiFrameRgn( HDC hdc, HRGN hrgn, HBRUSH brush,
                                INT width, INT height );
 BOOL     WINAPI NtGdiFillPath( HDC hdc );
@@ -226,14 +234,19 @@ BOOL     WINAPI NtGdiGetAndSetDCDword( HDC hdc, UINT method, DWORD value, DWORD 
 INT      WINAPI NtGdiGetAppClipBox( HDC hdc, RECT *rect );
 BOOL     WINAPI NtGdiGetBitmapDimension( HBITMAP bitmap, SIZE *size );
 UINT     WINAPI NtGdiGetBoundsRect( HDC hdc, RECT *rect, UINT flags );
-BOOL     WINAPI NtGdiGetCharABCWidthsW( HDC hdc, UINT first_char, UINT last_char, ABC *abc );
-BOOL     WINAPI NtGdiGetCharWidthW( HDC hdc, UINT first_char, UINT last_char, INT *buffer );
+BOOL     WINAPI NtGdiGetCharABCWidthsW( HDC hdc, UINT first, UINT last, WCHAR *chars,
+                                        ULONG flags, void *buffer );
+BOOL     WINAPI NtGdiGetCharWidthW( HDC hdc, UINT first_char, UINT last_char, WCHAR *chars,
+                                    ULONG flags, void *buffer );
 BOOL     WINAPI NtGdiGetDCDword( HDC hdc, UINT method, DWORD *result );
 BOOL     WINAPI NtGdiGetDCPoint( HDC hdc, UINT method, POINT *result );
 INT      WINAPI NtGdiGetDeviceCaps( HDC hdc, INT cap );
 BOOL     WINAPI NtGdiGetDeviceGammaRamp( HDC hdc, void *ptr );
-BOOL     WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *rect,
-                                  const WCHAR *str, UINT count, const INT *dx, DWORD cp );
+DWORD    WINAPI NtGdiGetFontData( HDC hdc, DWORD table, DWORD offset, void *buffer, DWORD length );
+DWORD    WINAPI NtGdiGetGlyphOutlineW( HDC hdc, UINT ch, UINT format, GLYPHMETRICS *metrics,
+                                       DWORD size, void *buffer, const MAT2 *mat2,
+                                       BOOL ignore_rotation );
+DWORD    WINAPI NtGdiGetKerningPairsW( HDC hdc, DWORD count, KERNINGPAIR *kern_pair );
 BOOL     WINAPI NtGdiGetMiterLimit( HDC hdc, FLOAT *limit );
 COLORREF WINAPI NtGdiGetNearestColor( HDC hdc, COLORREF color );
 UINT     WINAPI NtGdiGetNearestPaletteIndex( HPALETTE hpalette, COLORREF color );
