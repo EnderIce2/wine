@@ -736,13 +736,13 @@ static void codeview_add_udt_element(struct codeview_type_parse* ctp,
         case LF_BITFIELD_V1:
             symt_add_udt_element(ctp->module, symt, name,
                                  codeview_fetch_type(ctp, cv_type->bitfield_v1.type, FALSE),
-                                 (value << 3) + cv_type->bitfield_v1.bitoff,
+                                 value, cv_type->bitfield_v1.bitoff,
                                  cv_type->bitfield_v1.nbits);
             return;
         case LF_BITFIELD_V2:
             symt_add_udt_element(ctp->module, symt, name,
                                  codeview_fetch_type(ctp, cv_type->bitfield_v2.type, FALSE),
-                                 (value << 3) + cv_type->bitfield_v2.bitoff,
+                                 value, cv_type->bitfield_v2.bitoff,
                                  cv_type->bitfield_v2.nbits);
             return;
         }
@@ -753,8 +753,7 @@ static void codeview_add_udt_element(struct codeview_type_parse* ctp,
     {
         DWORD64 elem_size = 0;
         symt_get_info(ctp->module, subtype, TI_GET_LENGTH, &elem_size);
-        symt_add_udt_element(ctp->module, symt, name, subtype,
-                             value << 3, (DWORD)elem_size << 3);
+        symt_add_udt_element(ctp->module, symt, name, subtype, value, 0, 0);
     }
 }
 
@@ -1851,6 +1850,7 @@ static BOOL codeview_snarf(const struct msc_debug_info* msc_dbg, const BYTE* roo
             compiland = symt_new_compiland(msc_dbg->module, 0 /* FIXME */,
                                            source_new(msc_dbg->module, NULL,
                                                       sym->objname_v3.name));
+            break;
 
         case S_OBJNAME_ST:
             TRACE("S-ObjName-V1 %s\n", terminate_string(&sym->objname_v1.p_name));

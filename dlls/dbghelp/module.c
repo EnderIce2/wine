@@ -233,6 +233,9 @@ struct module* module_new(struct process* pcs, const WCHAR* name,
     module->sources           = 0;
     wine_rb_init(&module->sources_offsets_tree, source_rb_compare);
 
+    /* add top level symbol */
+    module->top = symt_new_module(module);
+
     return module;
 }
 
@@ -677,7 +680,7 @@ BOOL image_check_alternate(struct image_file_map* fmap, const struct module* mod
         const char* dbg_link;
 
         found = TRUE;
-        dbg_link = (const char*)image_map_section(&debuglink_sect);
+        dbg_link = image_map_section(&debuglink_sect);
         if (dbg_link != IMAGE_NO_MAP)
         {
             /* The content of a debug link section is:

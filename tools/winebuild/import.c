@@ -1426,6 +1426,8 @@ void output_syscalls( DLLSPEC *spec )
     int i, count;
     ORDDEF **syscalls = NULL;
 
+    if (unix_lib) return;
+
     for (i = count = 0; i < spec->nb_entry_points; i++)
     {
         ORDDEF *odp = &spec->entry_points[i];
@@ -1439,25 +1441,12 @@ void output_syscalls( DLLSPEC *spec )
     output( "\n/* system calls */\n\n" );
     output( "\t.text\n" );
 
-    if (unix_lib)
-    {
-        output( "\t.data\n" );
-        output( "\t.align %d\n", get_alignment( get_ptr_size() ) );
-        output( "%s\n", asm_globl("__wine_syscall_table") );
-        output( "\t%s .Lsyscall_table, 0, %u, .Lsyscall_args\n", get_asm_ptr_keyword(), count );
-        output( ".Lsyscall_table:\n" );
-        for (i = 0; i < count; i++)
-            output( "\t%s %s\n", get_asm_ptr_keyword(), asm_name( get_link_name( syscalls[i] )));
-        output( ".Lsyscall_args:\n" );
-        for (i = 0; i < count; i++)
-            output( "\t.byte %u\n", get_args_size( syscalls[i] ));
-        return;
-    }
-
     for (i = 0; i < count; i++)
     {
         ORDDEF *odp = syscalls[i];
         const char *name = get_link_name(odp);
+        unsigned int id = (spec->syscall_table << 12) + i;
+
         output( "\t.align %d\n", get_alignment(16) );
         output( "\t%s\n", func_declaration(name) );
         output( "%s\n", asm_globl(name) );
@@ -1469,12 +1458,12 @@ void output_syscalls( DLLSPEC *spec )
             {
                 output( "\tcall %s\n", asm_name("__wine_spec_get_pc_thunk_eax") );
                 output( "1:\tmovl %s-1b(%%eax),%%edx\n", asm_name("__wine_syscall_dispatcher") );
-                output( "\tmovl $%u,%%eax\n", i );
+                output( "\tmovl $%u,%%eax\n", id );
                 needs_get_pc_thunk = 1;
             }
             else
             {
-                output( "\tmovl $%u,%%eax\n", i );
+                output( "\tmovl $%u,%%eax\n", id );
                 output( "\tmovl $%s,%%edx\n", asm_name("__wine_syscall") );
             }
             output( "\tcall *%%edx\n" );
@@ -1488,7 +1477,7 @@ void output_syscalls( DLLSPEC *spec )
              * validate that instruction, we can just put a jmp there instead. */
             output( "\t.byte 0x4c,0x8b,0xd1\n" ); /* movq %rcx,%r10 */
             output( "\t.byte 0xb8\n" );           /* movl $i,%eax */
-            output( "\t.long %u\n", i );
+            output( "\t.long %u\n", id );
             output( "\t.byte 0xf6,0x04,0x25,0x08,0x03,0xfe,0x7f,0x01\n" ); /* testb $1,0x7ffe0308 */
             output( "\t.byte 0x75,0x03\n" );      /* jne 1f */
             output( "\t.byte 0x0f,0x05\n" );      /* syscall */
@@ -1509,14 +1498,14 @@ void output_syscalls( DLLSPEC *spec )
             break;
         case CPU_ARM:
             output( "\tpush {r0-r3}\n" );
-            output( "\tmovw ip, #%u\n", i );
+            output( "\tmovw ip, #%u\n", id );
             output( "\tmov r3, lr\n" );
             output( "\tbl %s\n", asm_name("__wine_syscall") );
             output( "\tadd sp, #16\n" );
             output( "\tbx lr\n" );
             break;
         case CPU_ARM64:
-            output( "\tmov x8, #%u\n", i );
+            output( "\tmov x8, #%u\n", id );
             output( "\tmov x9, x30\n" );
             output( "\tbl %s\n", asm_name("__wine_syscall" ));
             output( "\tret\n" );
@@ -1572,6 +1561,8 @@ void output_syscalls( DLLSPEC *spec )
     output( "\t.align %d\n", get_alignment( get_ptr_size() ) );
     output( "%s\n", asm_globl("__wine_syscall_dispatcher") );
     output( "\t%s 0\n", get_asm_ptr_keyword() );
+    output( "\t.short %u\n", count );
+    for (i = 0; i < count; i++) output( "\t.byte %u\n", get_args_size( syscalls[i] ));
 }
 
 

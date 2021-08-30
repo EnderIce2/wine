@@ -35,6 +35,9 @@
 WINE_DEFAULT_DEBUG_CHANNEL(dbghelp);
 WINE_DECLARE_DEBUG_CHANNEL(dbghelp_symt);
 
+extern char * CDECL __unDName(char *buffer, const char *mangled, int len,
+        void * (CDECL *pfn_alloc)(size_t), void (CDECL *pfn_free)(void *), unsigned short flags);
+
 static const WCHAR starW[] = {'*','\0'};
 
 static inline int cmp_addr(ULONG64 a1, ULONG64 a2)
@@ -180,6 +183,19 @@ static WCHAR* file_regex(const char* srcfile)
     return mask;
 }
 
+struct symt_module* symt_new_module(struct module* module)
+{
+    struct symt_module*    sym;
+
+    TRACE_(dbghelp_symt)("Adding toplevel exe symbol %s\n", debugstr_w(module->module.ModuleName));
+    if ((sym = pool_alloc(&module->pool, sizeof(*sym))))
+    {
+        sym->symt.tag = SymTagExe;
+        sym->module   = module;
+    }
+    return sym;
+}
+
 struct symt_compiland* symt_new_compiland(struct module* module, 
                                           ULONG_PTR address, unsigned src_idx)
 {
@@ -189,9 +205,10 @@ struct symt_compiland* symt_new_compiland(struct module* module,
                          debugstr_w(module->module.ModuleName), source_get(module, src_idx));
     if ((sym = pool_alloc(&module->pool, sizeof(*sym))))
     {
-        sym->symt.tag = SymTagCompiland;
-        sym->address  = address;
-        sym->source   = src_idx;
+        sym->symt.tag  = SymTagCompiland;
+        sym->container = module->top;
+        sym->address   = address;
+        sym->source    = src_idx;
         vector_init(&sym->vchildren, sizeof(struct symt*), 32);
     }
     return sym;
@@ -561,6 +578,7 @@ static void symt_fill_sym_info(struct module_pair* pair,
 {
     const char* name;
     DWORD64 size;
+    char* tmp;
 
     if (!symt_get_info(pair->effective, sym, TI_GET_TYPE, &sym_info->TypeIndex))
         sym_info->TypeIndex = 0;
@@ -697,17 +715,16 @@ static void symt_fill_sym_info(struct module_pair* pair,
     sym_info->Scope = 0; /* FIXME */
     sym_info->Tag = sym->tag;
     name = symt_get_name(sym);
-    if (sym_info->MaxNameLen)
+    if (sym_info->MaxNameLen &&
+        sym->tag == SymTagPublicSymbol && (dbghelp_options & SYMOPT_UNDNAME) &&
+        (tmp = __unDName(NULL, name, 0, malloc, free, UNDNAME_NAME_ONLY)) != NULL)
     {
-        if (sym->tag != SymTagPublicSymbol || !(dbghelp_options & SYMOPT_UNDNAME) ||
-            ((sym_info->NameLen = UnDecorateSymbolName(name, sym_info->Name,
-                                                       sym_info->MaxNameLen, UNDNAME_NAME_ONLY)) == 0))
-        {
-            sym_info->NameLen = min(strlen(name), sym_info->MaxNameLen - 1);
-            memcpy(sym_info->Name, name, sym_info->NameLen);
-            sym_info->Name[sym_info->NameLen] = '\0';
-        }
+        symbol_setname(sym_info, tmp);
+        free(tmp);
     }
+    else
+        symbol_setname(sym_info, name);
+
     TRACE_(dbghelp_symt)("%p => %s %u %s\n",
                          sym, sym_info->Name, sym_info->Size,
                          wine_dbgstr_longlong(sym_info->Address));
@@ -992,6 +1009,29 @@ static BOOL symt_enum_locals(struct process* pcs, const WCHAR* mask,
     return FALSE;
 }
 
+/**********************************************************
+ *              symbol_setname
+ *
+ * Properly sets Name and NameLen in SYMBOL_INFO
+ * according to MaxNameLen value
+ */
+void symbol_setname(SYMBOL_INFO* sym_info, const char* name)
+{
+    SIZE_T len = 0;
+    if (name)
+    {
+        sym_info->NameLen = strlen(name);
+        if (sym_info->MaxNameLen)
+        {
+            len = min(sym_info->NameLen, sym_info->MaxNameLen - 1);
+            memcpy(sym_info->Name, name, len);
+        }
+    }
+    else
+        sym_info->NameLen = 0;
+    sym_info->Name[len] = '\0';
+}
+
 /******************************************************************
  *		copy_symbolW
  *
@@ -1144,8 +1184,7 @@ struct sym_enumW
     PSYM_ENUMERATESYMBOLS_CALLBACKW     cb;
     void*                               ctx;
     PSYMBOL_INFOW                       sym_info;
-    char                                buffer[sizeof(SYMBOL_INFOW) + MAX_SYM_NAME];
-
+    char                                buffer[sizeof(SYMBOL_INFOW) + MAX_SYM_NAME * sizeof(WCHAR)];
 };
     
 static BOOL CALLBACK sym_enumW(PSYMBOL_INFO si, ULONG size, PVOID ctx)
@@ -1412,7 +1451,7 @@ BOOL WINAPI SymFromNameW(HANDLE process, const WCHAR *name, SYMBOL_INFOW *symbol
 
     TRACE("(%p, %s, %p)\n", process, debugstr_w(name), symbol);
 
-    len = sizeof(*si) + symbol->MaxNameLen * sizeof(WCHAR);
+    len = sizeof(*si) + symbol->MaxNameLen;
     if (!(si = HeapAlloc(GetProcessHeap(), 0, len))) return FALSE;
 
     len = WideCharToMultiByte(CP_ACP, 0, name, -1, NULL, 0, NULL, NULL);
@@ -1810,9 +1849,6 @@ BOOL WINAPI SymUnDName64(PIMAGEHLP_SYMBOL64 sym, PSTR UnDecName, DWORD UnDecName
     return UnDecorateSymbolName(sym->Name, UnDecName, UnDecNameLength,
                                 UNDNAME_COMPLETE) != 0;
 }
-
-extern char * CDECL __unDName(char *buffer, const char *mangled, int len,
-        void * (CDECL *pfn_alloc)(size_t), void (CDECL *pfn_free)(void *), unsigned short flags);
 
 /***********************************************************************
  *		UnDecorateSymbolName (DBGHELP.@)

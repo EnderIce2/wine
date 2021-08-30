@@ -161,9 +161,16 @@ struct symt_block
     struct vector               vchildren;      /* sub-blocks & local variables */
 };
 
+struct symt_module /* in fact any of .exe, .dll... */
+{
+    struct symt                 symt;           /* module */
+    struct module*              module;
+};
+
 struct symt_compiland
 {
     struct symt                 symt;
+    struct symt_module*         container;      /* symt_module */
     ULONG_PTR                   address;
     unsigned                    source;
     struct vector               vchildren;      /* global variables & functions */
@@ -194,7 +201,8 @@ struct symt_data
         struct
         {
             LONG_PTR                    offset;
-            ULONG_PTR                   length;
+            ULONG_PTR                   bit_length;
+            ULONG_PTR                   bit_offset;
         } member;
         /* DataIsConstant */
         VARIANT                 value;
@@ -262,8 +270,8 @@ struct symt_basic
 struct symt_enum
 {
     struct symt                 symt;
+    struct hash_table_elt       hash_elt;
     struct symt*                base_type;
-    const char*                 name;
     struct vector               vchildren;
 };
 
@@ -374,6 +382,7 @@ struct module
     unsigned                    sorttab_size;
     struct symt_ht**            addr_sorttab;
     struct hash_table           ht_symbols;
+    struct symt_module*         top;
 
     /* types */
     struct hash_table           ht_types;
@@ -704,8 +713,11 @@ extern WCHAR*       symt_get_nameW(const struct symt* sym) DECLSPEC_HIDDEN;
 extern BOOL         symt_get_address(const struct symt* type, ULONG64* addr) DECLSPEC_HIDDEN;
 extern int __cdecl  symt_cmp_addr(const void* p1, const void* p2) DECLSPEC_HIDDEN;
 extern void         copy_symbolW(SYMBOL_INFOW* siw, const SYMBOL_INFO* si) DECLSPEC_HIDDEN;
+extern void         symbol_setname(SYMBOL_INFO* si, const char* name) DECLSPEC_HIDDEN;
 extern struct symt_ht*
                     symt_find_nearest(struct module* module, DWORD_PTR addr) DECLSPEC_HIDDEN;
+extern struct symt_module*
+                    symt_new_module(struct module* module) DECLSPEC_HIDDEN;
 extern struct symt_compiland*
                     symt_new_compiland(struct module* module, ULONG_PTR address,
                                        unsigned src_idx) DECLSPEC_HIDDEN;
@@ -792,7 +804,7 @@ extern BOOL         symt_add_udt_element(struct module* module,
                                          struct symt_udt* udt_type, 
                                          const char* name,
                                          struct symt* elt_type, unsigned offset, 
-                                         unsigned size) DECLSPEC_HIDDEN;
+                                         unsigned bit_offset, unsigned bit_size) DECLSPEC_HIDDEN;
 extern struct symt_enum*
                     symt_new_enum(struct module* module, const char* typename,
                                   struct symt* basetype) DECLSPEC_HIDDEN;

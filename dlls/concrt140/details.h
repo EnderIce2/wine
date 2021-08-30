@@ -1,7 +1,5 @@
 /*
- * Definitions for Unix libraries
- *
- * Copyright (C) 2021 Alexandre Julliard
+ * Copyright 2021 Piotr Caban for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,17 +16,20 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#ifndef __WINE_WINE_UNIXLIB_H
-#define __WINE_WINE_UNIXLIB_H
+#include <stdbool.h>
+#include <stdlib.h>
+#include "windef.h"
+#include "winternl.h"
+#include "cxx.h"
 
-typedef NTSTATUS (*unixlib_entry_t)( void *args );
-typedef UINT64 unixlib_handle_t;
+void* __cdecl operator_new(size_t);
+void __cdecl operator_delete(void*);
 
-extern NTSTATUS WINAPI __wine_unix_call( unixlib_handle_t handle, unsigned int code, void *args );
+bool __cdecl Context_IsCurrentTaskCollectionCanceling(void);
 
-/* some useful helpers from ntdll */
-extern DWORD ntdll_umbstowcs( const char *src, DWORD srclen, WCHAR *dst, DWORD dstlen );
-extern int ntdll_wcstoumbs( const WCHAR *src, DWORD srclen, char *dst, DWORD dstlen, BOOL strict );
-extern NTSTATUS ntdll_init_syscalls( ULONG id, SYSTEM_SERVICE_TABLE *table, void **dispatcher );
+void init_concurrency_details(void*);
 
-#endif  /* __WINE_WINE_UNIXLIB_H */
+void WINAPI DECLSPEC_NORETURN _CxxThrowException(void*,const cxx_exception_type*);
+extern void (__cdecl *_Xmem)(void);
+extern void (__cdecl *_Xout_of_range)(const char*);
+void DECLSPEC_NORETURN throw_range_error(const char*);

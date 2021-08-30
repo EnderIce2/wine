@@ -1187,7 +1187,7 @@ DWORD WINAPI GetCharacterPlacementW( HDC hdc, const WCHAR *str, INT count, INT m
     }
 
     if (result->lpGlyphs)
-        GetGlyphIndicesW( hdc, str, set_cnt, result->lpGlyphs, 0 );
+        NtGdiGetGlyphIndicesW( hdc, str, set_cnt, result->lpGlyphs, 0 );
 
     if (GetTextExtentPoint32W( hdc, str, count, &size ))
         ret = MAKELONG( size.cx + kern_total, size.cy );
@@ -1896,4 +1896,274 @@ DWORD WINAPI GetFontLanguageInfo( HDC hdc )
         result |= GCP_REORDER;
 
     return result;
+}
+
+/*************************************************************************
+ *           GetGlyphIndicesA    (GDI32.@)
+ */
+DWORD WINAPI GetGlyphIndicesA( HDC hdc, const char *str, INT count, WORD *indices, DWORD flags )
+{
+    DWORD ret;
+    WCHAR *strW;
+    INT countW;
+
+    TRACE( "(%p, %s, %d, %p, 0x%x)\n", hdc, debugstr_an(str, count), count, indices, flags );
+
+    strW = text_mbtowc( hdc, str, count, &countW, NULL );
+    ret = NtGdiGetGlyphIndicesW( hdc, strW, countW, indices, flags );
+    HeapFree( GetProcessHeap(), 0, strW );
+    return ret;
+}
+
+/***********************************************************************
+ *          GetAspectRatioFilterEx  (GDI32.@)
+ */
+BOOL WINAPI GetAspectRatioFilterEx( HDC hdc, SIZE *aspect_ratio )
+{
+  FIXME( "(%p, %p): stub\n", hdc, aspect_ratio );
+  return FALSE;
+}
+
+/***********************************************************************
+ *           GetTextCharset    (GDI32.@)
+ */
+UINT WINAPI GetTextCharset( HDC hdc )
+{
+    /* MSDN docs say this is equivalent */
+    return NtGdiGetTextCharsetInfo( hdc, NULL, 0 );
+}
+
+/***********************************************************************
+ *           GdiGetCharDimensions    (GDI32.@)
+ *
+ * Gets the average width of the characters in the English alphabet.
+ *
+ * NOTES
+ *  This function is used by the dialog manager to get the size of a dialog
+ *  unit. It should also be used by other pieces of code that need to know
+ *  the size of a dialog unit in logical units without having access to the
+ *  window handle of the dialog.
+ *  Windows caches the font metrics from this function, but we don't and
+ *  there doesn't appear to be an immediate advantage to do so.
+ */
+LONG WINAPI GdiGetCharDimensions( HDC hdc, TEXTMETRICW *metric, LONG *height )
+{
+    SIZE sz;
+
+    if (metric && !GetTextMetricsW( hdc, metric )) return 0;
+
+    if (!GetTextExtentPointW( hdc, L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                              52, &sz ))
+        return 0;
+
+    if (height) *height = sz.cy;
+    return (sz.cx / 26 + 1) / 2;
+}
+
+/***********************************************************************
+ *          EnableEUDC  (GDI32.@)
+ */
+BOOL WINAPI EnableEUDC( BOOL enable )
+{
+    FIXME( "(%d): stub\n", enable );
+    return FALSE;
+}
+
+/*************************************************************************
+ *             GetFontFileData   (GDI32.@)
+ */
+BOOL WINAPI GetFontFileData( DWORD instance_id, DWORD file_index, UINT64 offset,
+                             void *buff, DWORD buff_size )
+{
+    return NtGdiGetFontFileData( instance_id, file_index, &offset, buff, buff_size );
+}
+
+struct realization_info
+{
+    DWORD flags;       /* 1 for bitmap fonts, 3 for scalable fonts */
+    DWORD cache_num;   /* keeps incrementing - num of fonts that have been created allowing for caching?? */
+    DWORD instance_id; /* identifies a realized font instance */
+};
+
+/*************************************************************
+ *           GdiRealizationInfo    (GDI32.@)
+ *
+ * Returns a structure that contains some font information.
+ */
+BOOL WINAPI GdiRealizationInfo( HDC hdc, struct realization_info *info )
+{
+    struct font_realization_info ri;
+
+    ri.size = sizeof(ri);
+    if (!NtGdiGetRealizationInfo( hdc, &ri )) return FALSE;
+
+    info->flags = ri.flags;
+    info->cache_num = ri.cache_num;
+    info->instance_id = ri.instance_id;
+    return TRUE;
+}
+
+/***********************************************************************
+ *           EnumFontFamiliesA    (GDI32.@)
+ */
+INT WINAPI EnumFontFamiliesA( HDC hdc, const char *family, FONTENUMPROCA efproc, LPARAM data )
+{
+    LOGFONTA lf;
+
+    if (family)
+    {
+        if (!*family) return 1;
+        lstrcpynA( lf.lfFaceName, family, LF_FACESIZE );
+        lf.lfCharSet = DEFAULT_CHARSET;
+        lf.lfPitchAndFamily = 0;
+    }
+
+    return EnumFontFamiliesExA( hdc, family ? &lf : NULL, efproc, data, 0 );
+}
+
+/***********************************************************************
+ *           EnumFontFamiliesW    (GDI32.@)
+ */
+INT WINAPI EnumFontFamiliesW( HDC hdc, const WCHAR *family, FONTENUMPROCW efproc, LPARAM data )
+{
+    LOGFONTW lf;
+
+    if (family)
+    {
+        if (!*family) return 1;
+        lstrcpynW( lf.lfFaceName, family, LF_FACESIZE );
+        lf.lfCharSet = DEFAULT_CHARSET;
+        lf.lfPitchAndFamily = 0;
+    }
+
+    return EnumFontFamiliesExW( hdc, family ? &lf : NULL, efproc, data, 0 );
+}
+
+/***********************************************************************
+ *           EnumFontsA    (GDI32.@)
+ */
+INT WINAPI EnumFontsA( HDC hdc, const char *name, FONTENUMPROCA efproc, LPARAM data )
+{
+    return EnumFontFamiliesA( hdc, name, efproc, data );
+}
+
+/***********************************************************************
+ *           EnumFontsW    (GDI32.@)
+ */
+INT WINAPI EnumFontsW( HDC hdc, const WCHAR *name, FONTENUMPROCW efproc, LPARAM data )
+{
+    return EnumFontFamiliesW( hdc, name, efproc, data );
+}
+
+/***********************************************************************
+ *           CreateScalableFontResourceA   (GDI32.@)
+ */
+BOOL WINAPI CreateScalableFontResourceA( DWORD hidden, const char *resource_file,
+                                         const char *font_file, const char *current_path )
+{
+    WCHAR *resource_fileW = NULL;
+    WCHAR *current_pathW = NULL;
+    WCHAR *font_fileW = NULL;
+    int len;
+    BOOL ret;
+
+    if (resource_file)
+    {
+        len = MultiByteToWideChar( CP_ACP, 0, resource_file, -1, NULL, 0 );
+        resource_fileW = HeapAlloc( GetProcessHeap(), 0, len * sizeof(WCHAR) );
+        MultiByteToWideChar( CP_ACP, 0, resource_file, -1, resource_fileW, len );
+    }
+
+    if (font_file)
+    {
+        len = MultiByteToWideChar( CP_ACP, 0, font_file, -1, NULL, 0 );
+        font_fileW = HeapAlloc( GetProcessHeap(), 0, len * sizeof(WCHAR) );
+        MultiByteToWideChar( CP_ACP, 0, font_file, -1, font_fileW, len );
+    }
+
+    if (current_path)
+    {
+        len = MultiByteToWideChar( CP_ACP, 0, current_path, -1, NULL, 0 );
+        current_pathW = HeapAlloc( GetProcessHeap(), 0, len * sizeof(WCHAR) );
+        MultiByteToWideChar( CP_ACP, 0, current_path, -1, current_pathW, len );
+    }
+
+    ret = CreateScalableFontResourceW( hidden, resource_fileW,
+                                       font_fileW, current_pathW );
+
+    HeapFree(GetProcessHeap(), 0, resource_fileW);
+    HeapFree(GetProcessHeap(), 0, font_fileW);
+    HeapFree(GetProcessHeap(), 0, current_pathW);
+    return ret;
+}
+
+/***********************************************************************
+ *           AddFontResourceA    (GDI32.@)
+ */
+INT WINAPI AddFontResourceA( const char *str )
+{
+    return AddFontResourceExA( str, 0, NULL);
+}
+
+/***********************************************************************
+ *           AddFontResourceW    (GDI32.@)
+ */
+INT WINAPI AddFontResourceW( const WCHAR *str )
+{
+    return AddFontResourceExW( str, 0, NULL );
+}
+
+/***********************************************************************
+ *           AddFontResourceExA    (GDI32.@)
+ */
+INT WINAPI AddFontResourceExA( const char *str, DWORD fl, void *pdv )
+{
+    DWORD len = MultiByteToWideChar( CP_ACP, 0, str, -1, NULL, 0 );
+    LPWSTR strW = HeapAlloc( GetProcessHeap(), 0, len * sizeof(WCHAR) );
+    INT ret;
+
+    MultiByteToWideChar( CP_ACP, 0, str, -1, strW, len );
+    ret = AddFontResourceExW( strW, fl, pdv );
+    HeapFree( GetProcessHeap(), 0, strW );
+    return ret;
+}
+
+/***********************************************************************
+ *           RemoveFontResourceA    (GDI32.@)
+ */
+BOOL WINAPI RemoveFontResourceA( const char *str )
+{
+    return RemoveFontResourceExA( str, 0, 0 );
+}
+
+/***********************************************************************
+ *           RemoveFontResourceW    (GDI32.@)
+ */
+BOOL WINAPI RemoveFontResourceW( const WCHAR *str )
+{
+    return RemoveFontResourceExW( str, 0, 0 );
+}
+
+/***********************************************************************
+ *           RemoveFontResourceExA    (GDI32.@)
+ */
+BOOL WINAPI RemoveFontResourceExA( const char *str, DWORD fl, void *pdv )
+{
+    DWORD len = MultiByteToWideChar( CP_ACP, 0, str, -1, NULL, 0 );
+    LPWSTR strW = HeapAlloc( GetProcessHeap(), 0, len * sizeof(WCHAR) );
+    INT ret;
+
+    MultiByteToWideChar( CP_ACP, 0, str, -1, strW, len );
+    ret = RemoveFontResourceExW( strW, fl, pdv );
+    HeapFree( GetProcessHeap(), 0, strW );
+    return ret;
+}
+
+/***********************************************************************
+ *           GetFontResourceInfoW    (GDI32.@)
+ */
+BOOL WINAPI GetFontResourceInfoW( const WCHAR *str, DWORD *size, void *buffer, DWORD type )
+{
+    FIXME( "%s %p(%d) %p %d\n", debugstr_w(str), size, size ? *size : 0, buffer, type );
+    return FALSE;
 }

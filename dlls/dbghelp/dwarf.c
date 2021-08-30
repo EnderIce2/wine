@@ -1422,7 +1422,7 @@ static void dwarf2_parse_udt_member(dwarf2_parse_context_t* ctx,
     }
     else bit_offset.u.uvalue = 0;
     symt_add_udt_element(ctx->module, parent, name.u.string, elt_type,    
-                         (loc.offset << 3) + bit_offset.u.uvalue,
+                         loc.offset, bit_offset.u.uvalue,
                          bit_size.u.uvalue);
 
     if (dwarf2_get_di_children(ctx, di)) FIXME("Unsupported children\n");
@@ -3167,7 +3167,7 @@ static ULONG_PTR eval_expression(const struct module* module, struct cpu_stack_w
             case 1: stack[sp] = *(unsigned char*)&tmp; break;
             case 2: stack[sp] = *(unsigned short*)&tmp; break;
             case 4: stack[sp] = *(unsigned int*)&tmp; break;
-            case 8: stack[sp] = *(ULONG_PTR*)&tmp; break; /* FIXME: won't work on 32bit platform */
+            case 8: stack[sp] = tmp; break; /* FIXME: won't work on 32bit platform */
             default: FIXME("Unknown size for deref 0x%lx\n", sz);
             }
             break;
