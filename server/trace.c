@@ -1549,7 +1549,6 @@ static void dump_init_process_done_reply( const struct init_process_done_reply *
 {
     dump_uint64( " entry=", &req->entry );
     fprintf( stderr, ", suspend=%d", req->suspend );
-    fprintf( stderr, ", processed_event=%04x", req->processed_event );
 }
 
 static void dump_init_first_thread_request( const struct init_first_thread_request *req )
@@ -1568,7 +1567,6 @@ static void dump_init_first_thread_reply( const struct init_first_thread_reply *
     dump_timeout( ", server_start=", &req->server_start );
     fprintf( stderr, ", session_id=%08x", req->session_id );
     fprintf( stderr, ", info_size=%u", req->info_size );
-    fprintf( stderr, ", processed_event=%04x", req->processed_event );
     dump_varargs_ushorts( ", machines=", cur_size );
 }
 
@@ -1584,7 +1582,6 @@ static void dump_init_thread_request( const struct init_thread_request *req )
 static void dump_init_thread_reply( const struct init_thread_reply *req )
 {
     fprintf( stderr, " suspend=%d", req->suspend );
-    fprintf( stderr, ", processed_event=%04x", req->processed_event );
 }
 
 static void dump_terminate_process_request( const struct terminate_process_request *req )
@@ -1722,20 +1719,6 @@ static void dump_set_thread_info_request( const struct set_thread_info_request *
     dump_varargs_unicode_str( ", desc=", cur_size );
 }
 
-static void dump_get_dll_info_request( const struct get_dll_info_request *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-    dump_uint64( ", base_address=", &req->base_address );
-}
-
-static void dump_get_dll_info_reply( const struct get_dll_info_reply *req )
-{
-    dump_uint64( " entry_point=", &req->entry_point );
-    dump_uint64( ", base_address=", &req->base_address );
-    fprintf( stderr, ", filename_len=%u", req->filename_len );
-    dump_varargs_unicode_str( ", filename=", cur_size );
-}
-
 static void dump_suspend_thread_request( const struct suspend_thread_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
@@ -1766,12 +1749,6 @@ static void dump_queue_apc_reply( const struct queue_apc_reply *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
     fprintf( stderr, ", self=%d", req->self );
-}
-
-static void dump_finalize_apc_request( const struct finalize_apc_request *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-    dump_apc_call( ", call=", &req->call );
 }
 
 static void dump_get_apc_result_request( const struct get_apc_result_request *req )
@@ -2099,50 +2076,6 @@ static void dump_get_handle_fd_reply( const struct get_handle_fd_reply *req )
     fprintf( stderr, ", options=%08x", req->options );
 }
 
-static void dump_create_gpu_resource_request( const struct create_gpu_resource_request *req )
-{
-    fprintf( stderr, " access=%08x", req->access );
-    fprintf( stderr, ", fd=%d", req->fd );
-    dump_varargs_object_attributes( ", objattr=", cur_size );
-}
-
-static void dump_create_gpu_resource_reply( const struct create_gpu_resource_reply *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-    fprintf( stderr, ", kmt_handle=%04x", req->kmt_handle );
-}
-
-static void dump_open_gpu_resource_request( const struct open_gpu_resource_request *req )
-{
-    fprintf( stderr, " access=%08x", req->access );
-    fprintf( stderr, ", kmt_handle=%04x", req->kmt_handle );
-    fprintf( stderr, ", attributes=%08x", req->attributes );
-    fprintf( stderr, ", rootdir=%04x", req->rootdir );
-    dump_varargs_unicode_str( ", name=", cur_size );
-}
-
-static void dump_open_gpu_resource_reply( const struct open_gpu_resource_reply *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-}
-
-static void dump_query_gpu_resource_request( const struct query_gpu_resource_request *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-}
-
-static void dump_query_gpu_resource_reply( const struct query_gpu_resource_reply *req )
-{
-    fprintf( stderr, " kmt_handle=%04x", req->kmt_handle );
-    dump_varargs_bytes( ", userdata=", cur_size );
-}
-
-static void dump_set_userdata_gpu_resource_request( const struct set_userdata_gpu_resource_request *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-    dump_varargs_bytes( ", userdata=", cur_size );
-}
-
 static void dump_get_directory_cache_entry_request( const struct get_directory_cache_entry_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
@@ -2344,17 +2277,6 @@ static void dump_map_view_request( const struct map_view_request *req )
 static void dump_unmap_view_request( const struct unmap_view_request *req )
 {
     dump_uint64( " base=", &req->base );
-}
-
-static void dump_get_mapping_file_request( const struct get_mapping_file_request *req )
-{
-    fprintf( stderr, " process=%04x", req->process );
-    dump_uint64( ", addr=", &req->addr );
-}
-
-static void dump_get_mapping_file_reply( const struct get_mapping_file_reply *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
 }
 
 static void dump_get_mapping_committed_range_request( const struct get_mapping_committed_range_request *req )
@@ -4339,38 +4261,11 @@ static void dump_get_kernel_object_handle_request( const struct get_kernel_objec
     fprintf( stderr, " manager=%04x", req->manager );
     dump_uint64( ", user_ptr=", &req->user_ptr );
     fprintf( stderr, ", access=%08x", req->access );
-    fprintf( stderr, ", attributes=%08x", req->attributes );
 }
 
 static void dump_get_kernel_object_handle_reply( const struct get_kernel_object_handle_reply *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
-}
-
-static void dump_callback_subscribe_request( const struct callback_subscribe_request *req )
-{
-    fprintf( stderr, " manager=%04x", req->manager );
-    fprintf( stderr, ", callback_mask=%d", req->callback_mask );
-}
-
-static void dump_get_next_callback_event_request( const struct get_next_callback_event_request *req )
-{
-    fprintf( stderr, " manager=%04x", req->manager );
-}
-
-static void dump_get_next_callback_event_reply( const struct get_next_callback_event_reply *req )
-{
-    dump_krnl_cbdata( " cb_data=", &req->cb_data );
-    fprintf( stderr, ", client_tid=%04x", req->client_tid );
-    dump_uint64( ", client_thread=", &req->client_thread );
-    dump_varargs_unicode_str( ", string_paramenter=", cur_size );
-}
-
-static void dump_attach_process_request( const struct attach_process_request *req )
-{
-    fprintf( stderr, " manager=%04x", req->manager );
-    dump_uint64( ", process=", &req->process );
-    fprintf( stderr, ", detach=%d", req->detach );
 }
 
 static void dump_make_process_system_request( const struct make_process_system_request *req )
@@ -4714,11 +4609,9 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_thread_info_request,
     (dump_func)dump_get_thread_times_request,
     (dump_func)dump_set_thread_info_request,
-    (dump_func)dump_get_dll_info_request,
     (dump_func)dump_suspend_thread_request,
     (dump_func)dump_resume_thread_request,
     (dump_func)dump_queue_apc_request,
-    (dump_func)dump_finalize_apc_request,
     (dump_func)dump_get_apc_result_request,
     (dump_func)dump_close_handle_request,
     (dump_func)dump_set_handle_info_request,
@@ -4746,10 +4639,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_alloc_file_handle_request,
     (dump_func)dump_get_handle_unix_name_request,
     (dump_func)dump_get_handle_fd_request,
-    (dump_func)dump_create_gpu_resource_request,
-    (dump_func)dump_open_gpu_resource_request,
-    (dump_func)dump_query_gpu_resource_request,
-    (dump_func)dump_set_userdata_gpu_resource_request,
     (dump_func)dump_get_directory_cache_entry_request,
     (dump_func)dump_flush_request,
     (dump_func)dump_get_file_info_request,
@@ -4767,7 +4656,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_mapping_info_request,
     (dump_func)dump_map_view_request,
     (dump_func)dump_unmap_view_request,
-    (dump_func)dump_get_mapping_file_request,
     (dump_func)dump_get_mapping_committed_range_request,
     (dump_func)dump_add_mapping_committed_range_request,
     (dump_func)dump_is_same_mapping_request,
@@ -4944,9 +4832,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_grab_kernel_object_request,
     (dump_func)dump_release_kernel_object_request,
     (dump_func)dump_get_kernel_object_handle_request,
-    (dump_func)dump_callback_subscribe_request,
-    (dump_func)dump_get_next_callback_event_request,
-    (dump_func)dump_attach_process_request,
     (dump_func)dump_make_process_system_request,
     (dump_func)dump_get_token_info_request,
     (dump_func)dump_create_linked_token_request,
@@ -5001,11 +4886,9 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_thread_info_reply,
     (dump_func)dump_get_thread_times_reply,
     NULL,
-    (dump_func)dump_get_dll_info_reply,
     (dump_func)dump_suspend_thread_reply,
     (dump_func)dump_resume_thread_reply,
     (dump_func)dump_queue_apc_reply,
-    NULL,
     (dump_func)dump_get_apc_result_reply,
     NULL,
     (dump_func)dump_set_handle_info_reply,
@@ -5033,10 +4916,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_alloc_file_handle_reply,
     (dump_func)dump_get_handle_unix_name_reply,
     (dump_func)dump_get_handle_fd_reply,
-    (dump_func)dump_create_gpu_resource_reply,
-    (dump_func)dump_open_gpu_resource_reply,
-    (dump_func)dump_query_gpu_resource_reply,
-    NULL,
     (dump_func)dump_get_directory_cache_entry_reply,
     (dump_func)dump_flush_reply,
     (dump_func)dump_get_file_info_reply,
@@ -5054,7 +4933,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_mapping_info_reply,
     NULL,
     NULL,
-    (dump_func)dump_get_mapping_file_reply,
     (dump_func)dump_get_mapping_committed_range_reply,
     NULL,
     NULL,
@@ -5231,9 +5109,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     NULL,
     (dump_func)dump_get_kernel_object_handle_reply,
-    NULL,
-    (dump_func)dump_get_next_callback_event_reply,
-    NULL,
     (dump_func)dump_make_process_system_reply,
     (dump_func)dump_get_token_info_reply,
     (dump_func)dump_create_linked_token_reply,
@@ -5288,11 +5163,9 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "get_thread_info",
     "get_thread_times",
     "set_thread_info",
-    "get_dll_info",
     "suspend_thread",
     "resume_thread",
     "queue_apc",
-    "finalize_apc",
     "get_apc_result",
     "close_handle",
     "set_handle_info",
@@ -5320,10 +5193,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "alloc_file_handle",
     "get_handle_unix_name",
     "get_handle_fd",
-    "create_gpu_resource",
-    "open_gpu_resource",
-    "query_gpu_resource",
-    "set_userdata_gpu_resource",
     "get_directory_cache_entry",
     "flush",
     "get_file_info",
@@ -5341,7 +5210,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "get_mapping_info",
     "map_view",
     "unmap_view",
-    "get_mapping_file",
     "get_mapping_committed_range",
     "add_mapping_committed_range",
     "is_same_mapping",
@@ -5518,9 +5386,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "grab_kernel_object",
     "release_kernel_object",
     "get_kernel_object_handle",
-    "callback_subscribe",
-    "get_next_callback_event",
-    "attach_process",
     "make_process_system",
     "get_token_info",
     "create_linked_token",

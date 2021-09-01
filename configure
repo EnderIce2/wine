@@ -1847,6 +1847,7 @@ enable_regini
 enable_regsvcs
 enable_regsvr32
 enable_rpcss
+enable_run
 enable_rundll32
 enable_sc
 enable_schtasks
@@ -21280,6 +21281,7 @@ wine_fn_config_makefile programs/regsvcs enable_regsvcs
 wine_fn_config_makefile programs/regsvr32 enable_regsvr32
 wine_fn_config_makefile programs/rpcss enable_rpcss
 wine_fn_config_makefile programs/rundll.exe16 enable_win16
+wine_fn_config_makefile programs/run enable_run
 wine_fn_config_makefile programs/rundll32 enable_rundll32
 wine_fn_config_makefile programs/sc enable_sc
 wine_fn_config_makefile programs/schtasks enable_schtasks

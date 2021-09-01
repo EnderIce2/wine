@@ -22,6 +22,9 @@
         "win32u_private.h": "c",
         "thread": "c",
         "ntuser.h": "c",
-        "*.def": "c"
+        "*.def": "c",
+        "taskmgr.h": "c",
+        "windows.h": "c",
+        "commctrl.h": "c"
     }
 }

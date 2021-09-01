@@ -5634,7 +5634,6 @@ enum request
     REQ_get_thread_info,
     REQ_get_thread_times,
     REQ_set_thread_info,
-    REQ_get_dll_info,
     REQ_suspend_thread,
     REQ_resume_thread,
     REQ_queue_apc,
@@ -6485,7 +6484,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 734
+#define SERVER_PROTOCOL_VERSION 736
 
 /* ### protocol_version end ### */
 

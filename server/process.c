@@ -1665,8 +1665,8 @@ DECL_HANDLER(write_process_memory)
 }
 
 /* this should be removed, but i will remove it later... */
-DECL_HANDLER(load_dll)
-{
+// DECL_HANDLER(load_dll)
+// {
     // struct process_dll *dll;
     // struct object *done_event = NULL;
 
@@ -1692,17 +1692,7 @@ DECL_HANDLER(load_dll)
     //         current->process->callback_init_event = done_event;
     //     }
     // }
-}
-
-DECL_HANDLER(unload_dll)
-{
-
-}
-
-DECL_HANDLER(get_dll_info)
-{
-    
-}
+// }
 
 /* retrieve the process idle event */
 DECL_HANDLER(get_process_idle_event)

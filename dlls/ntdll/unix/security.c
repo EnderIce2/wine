@@ -200,7 +200,7 @@ NTSTATUS WINAPI NtQueryInformationToken(HANDLE token, TOKEN_INFORMATION_CLASS cl
     if (!priv)
     {
         WARN("WINEPRIV IS NULL!! I will use the default REQ function...\n");
-        priv = 0;
+        priv = "0";
     }
     if (!once_NtQueryInformationToken++)
     {
